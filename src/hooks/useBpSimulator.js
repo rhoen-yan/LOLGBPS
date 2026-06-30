@@ -519,15 +519,34 @@ export function useBpSimulator() {
   const toggleOurSide = useCallback(
     (side) => {
       if (!canEdit) return;
+      const trimmed = myTeamName.trim();
       setOurSide((prev) => {
         const next = prev === side ? null : side;
-        if (next === side && myTeamName.trim()) {
-          const defaultName = side === 'Blue' ? '藍方' : '紅方';
+
+        if (trimmed) {
           setTeamNames((names) => {
-            if (names[side] !== defaultName) return names;
-            return { ...names, [side]: myTeamName.trim() };
+            const blueDefault = '藍方';
+            const redDefault = '紅方';
+            const updated = { ...names };
+
+            const revertSide = (s) => {
+              const def = s === 'Blue' ? blueDefault : redDefault;
+              if (updated[s] === trimmed) updated[s] = def;
+            };
+
+            const applySide = (s) => {
+              const def = s === 'Blue' ? blueDefault : redDefault;
+              if (updated[s] === def) updated[s] = trimmed;
+            };
+
+            if (prev && prev !== next) revertSide(prev);
+            if (next === null && prev === side) revertSide(side);
+            if (next === side) applySide(side);
+
+            return updated;
           });
         }
+
         return next;
       });
     },
