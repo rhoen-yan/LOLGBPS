@@ -5,17 +5,24 @@
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "node --watch server/index.js",
-    "dev:client": "npm run dev --prefix my-bp-simulator",
-    "build": "npm install --prefix my-bp-simulator && npm run build --prefix my-bp-simulator",
+    "dev:client": "vite",
+    "build": "vite build",
     "start": "node server/index.js",
-    "postinstall": "npm install --prefix my-bp-simulator"
+    "preview": "vite preview"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "pg": "^8.16.0"
+    "pg": "^8.16.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "@tailwindcss/vite": "^4.1.11",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.0",
+    "tailwindcss": "^4.1.11",
+    "vite": "^6.3.5"
   },
   "engines": {
     "node": ">=20"

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { ensureDb, getRecordWithMeta, initDb, saveRecord } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distPath = path.join(__dirname, '../my-bp-simulator/dist');
+const distPath = path.join(__dirname, '../dist');
 const PORT = Number(process.env.PORT) || 3001;
 
 const app = express();

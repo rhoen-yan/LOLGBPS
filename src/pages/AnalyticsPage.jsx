@@ -218,17 +218,14 @@ function MatchupTable({ title, meta, rows, champions, getChampionIconUrl, showLa
 
 function OverviewCards({ overview }) {
   const cards = [
-    { label: '我方局數', value: overview.totalOurGames },
-    { label: '納入分析', value: overview.analyzedGames },
-    { label: '路線未標', value: overview.excludedLaneGames },
+    { label: '場數', value: overview.totalOurGames },
     { label: '勝', value: overview.wins, accent: 'text-emerald-400' },
     { label: '敗', value: overview.losses, accent: 'text-rose-400' },
     { label: '勝率', value: formatRate(overview.winRate) },
-    { label: '對手數', value: overview.opponentCount },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {cards.map((card) => (
         <div key={card.label} className="rounded-lg border border-gray-700/80 bg-gray-900/40 px-3 py-2.5">
           <p className="text-[10px] text-gray-500 mb-1">{card.label}</p>
