@@ -275,7 +275,6 @@ function GameRecord({
       <div className="flex justify-between items-center mb-3 gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold">第 {record.game} 局</span>
-          {isPending && <span className="text-xs text-amber-400">進行中</span>}
           {lanesIncomplete && <IncompleteLanesBadge />}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -312,6 +311,9 @@ function GameRecord({
             >
               {ourResult === 'win' ? '勝' : '敗'}
             </span>
+          )}
+          {isPending && (
+            <span className="text-sm font-medium text-amber-400">等待結果</span>
           )}
           {!isPending && winnerName && (
             <>
