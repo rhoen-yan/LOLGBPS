@@ -20,14 +20,24 @@ function IncompleteLanesBadge() {
   return <span className="lane-incomplete-badge">尚有路線未標</span>;
 }
 
-function EditableSeriesTeamName({ side, name, canEdit, onRename }) {
+function EditableSeriesTeamName({
+  side,
+  name,
+  seriesId,
+  canEdit,
+  onRenameSeries,
+  onRenameGlobal,
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
+  const [globalMode, setGlobalMode] = useState(false);
   const color = side === 'Blue' ? 'text-blue-400' : 'text-red-400';
 
   const commit = () => {
-    onRename(side, name, draft);
+    if (globalMode) onRenameGlobal(side, name, draft);
+    else onRenameSeries(seriesId, side, draft);
     setEditing(false);
+    setGlobalMode(false);
   };
 
   const startEdit = (e) => {
@@ -35,6 +45,7 @@ function EditableSeriesTeamName({ side, name, canEdit, onRename }) {
     e.stopPropagation();
     if (!canEdit) return;
     setDraft(name);
+    setGlobalMode(e.shiftKey);
     setEditing(true);
   };
 
@@ -68,7 +79,28 @@ function EditableSeriesTeamName({ side, name, canEdit, onRename }) {
   );
 }
 
-function ChampBanRow({ ids, champions, getChampionIconUrl }) {
+function SeriesOurSideButtons({ seriesId, canEdit, onFix }) {
+  if (!canEdit) return null;
+  return (
+    <span className="ml-2 inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 hover:bg-blue-900/60"
+        onClick={() => onFix(seriesId, 'Blue')}
+      >
+        我方藍
+      </button>
+      <button
+        type="button"
+        className="text-[10px] px-1.5 py-0.5 rounded bg-rose-900/40 text-rose-400 hover:bg-rose-900/60"
+        onClick={() => onFix(seriesId, 'Red')}
+      >
+        我方紅
+      </button>
+    </span>
+  );
+}
+
   if (!ids?.length) {
     return <span className="text-xs text-gray-600">—</span>;
   }
@@ -413,6 +445,8 @@ function SeriesGroup({
   removeSeriesEvent,
   requestRemoveSeries,
   renameTeamNameGlobally,
+  renameSeriesTeamName,
+  fixSeriesOurSide,
   canEdit,
   filters,
 }) {
@@ -440,16 +474,21 @@ function SeriesGroup({
           <EditableSeriesTeamName
             side="Blue"
             name={blueName}
+            seriesId={series.id}
             canEdit={canEdit}
-            onRename={renameTeamNameGlobally}
+            onRenameSeries={renameSeriesTeamName}
+            onRenameGlobal={renameTeamNameGlobally}
           />
           <span className="text-gray-500 mx-1.5">vs</span>
           <EditableSeriesTeamName
             side="Red"
             name={redName}
+            seriesId={series.id}
             canEdit={canEdit}
-            onRename={renameTeamNameGlobally}
+            onRenameSeries={renameSeriesTeamName}
+            onRenameGlobal={renameTeamNameGlobally}
           />
+          <SeriesOurSideButtons seriesId={series.id} canEdit={canEdit} onFix={fixSeriesOurSide} />
           <span className="text-gray-400 mx-2">·</span>
           <span className="tabular-nums text-gray-300">
             {series.finalScore.Blue}:{series.finalScore.Red}
@@ -518,6 +557,8 @@ export default function SeriesHistoryPanel() {
     removeSeriesEvent,
     requestRemoveSeries,
     renameTeamNameGlobally,
+    renameSeriesTeamName,
+    fixSeriesOurSide,
     canEdit,
   } = useBp();
 
@@ -677,6 +718,8 @@ export default function SeriesHistoryPanel() {
                     removeSeriesEvent={removeSeriesEvent}
                     requestRemoveSeries={requestRemoveSeries}
                     renameTeamNameGlobally={renameTeamNameGlobally}
+                    renameSeriesTeamName={renameSeriesTeamName}
+                    fixSeriesOurSide={fixSeriesOurSide}
                     canEdit={canEdit}
                     filters={filters}
                   />

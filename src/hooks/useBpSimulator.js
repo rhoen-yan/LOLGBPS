@@ -54,6 +54,16 @@ function syncOurTeamName(teamNames, ourSide, myTeamName) {
   return updated;
 }
 
+function clearMyTeamNameFromSides(teamNames, myTeamName) {
+  const trimmed = myTeamName.trim();
+  if (!trimmed) return teamNames;
+
+  const updated = { ...teamNames };
+  if (updated.Blue === trimmed) updated.Blue = '藍方';
+  if (updated.Red === trimmed) updated.Red = '紅方';
+  return updated;
+}
+
 export function useBpSimulator() {
   const [ddragonVersion, setDdragonVersion] = useState(DEFAULT_DDRAGON_VERSION);
   const [champions, setChampions] = useState([]);
@@ -157,11 +167,29 @@ export function useBpSimulator() {
     if (handler) handler();
   }, [modal.onConfirm]);
 
-  const saveTeamName = useCallback((side, value) => {
-    if (!canEdit) return;
-    const trimmed = value.trim() || (side === 'Blue' ? '藍方' : '紅方');
-    setTeamNames((prev) => ({ ...prev, [side]: trimmed }));
-  }, [canEdit]);
+  const saveTeamName = useCallback(
+    (side, value) => {
+      if (!canEdit) return;
+      const trimmed = value.trim() || (side === 'Blue' ? '藍方' : '紅方');
+      const configured = myTeamName.trim();
+      const sideDefault = side === 'Blue' ? '藍方' : '紅方';
+
+      if (configured && trimmed === configured) {
+        setOurSide(side);
+        setTeamNames((names) => syncOurTeamName(names, side, configured));
+        return;
+      }
+
+      if (ourSide === side && trimmed === sideDefault) {
+        setOurSide(null);
+        setTeamNames((prev) => ({ ...prev, [side]: trimmed }));
+        return;
+      }
+
+      setTeamNames((prev) => ({ ...prev, [side]: trimmed }));
+    },
+    [canEdit, myTeamName, ourSide],
+  );
 
   const updateTeamNameInput = useCallback((side, value) => {
     setTeamNames((prev) => ({ ...prev, [side]: value }));
@@ -182,17 +210,6 @@ export function useBpSimulator() {
     },
     [canEdit, ourSide],
   );
-
-  useEffect(() => {
-    if (!recordHydrated || !canEdit) return;
-    const trimmed = myTeamName.trim();
-    if (!ourSide || !trimmed) return;
-    setTeamNames((names) => {
-      const synced = syncOurTeamName(names, ourSide, trimmed);
-      if (synced.Blue === names.Blue && synced.Red === names.Red) return names;
-      return synced;
-    });
-  }, [recordHydrated, canEdit, ourSide, myTeamName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -515,13 +532,14 @@ export function useBpSimulator() {
   const clearCurrentSeries = useCallback(() => {
     setSeriesStartDate(null);
     setOurSide(null);
+    setTeamNames((names) => clearMyTeamNameFromSides(names, myTeamName));
     setCurrentSeriesScore({ Blue: 0, Red: 0 });
     setCurrentGameNumber(1);
     setSeriesHistory([]);
     setSeriesPickedChampions([]);
     resetGame();
     setTeamInputsLocked(false);
-  }, [resetGame]);
+  }, [resetGame, myTeamName]);
 
   const requestRemoveSeries = useCallback(
     (series) => {
@@ -549,13 +567,14 @@ export function useBpSimulator() {
     archiveCurrentSeries();
     setSeriesStartDate(null);
     setOurSide(null);
+    setTeamNames((names) => clearMyTeamNameFromSides(names, myTeamName));
     setCurrentSeriesScore({ Blue: 0, Red: 0 });
     setCurrentGameNumber(1);
     setSeriesHistory([]);
     setSeriesPickedChampions([]);
     resetGame();
     showModal('已重置', `${formatSeriesLabel(seriesLength)} 系列賽已重置，Pick 禁用清單已清除。`);
-  }, [canEdit, archiveCurrentSeries, resetGame, showModal, seriesLength]);
+  }, [canEdit, archiveCurrentSeries, resetGame, showModal, seriesLength, myTeamName]);
 
   const toggleOurSide = useCallback(
     (side) => {
@@ -819,6 +838,61 @@ export function useBpSimulator() {
     [canEdit],
   );
 
+  const renameSeriesTeamName = useCallback(
+    (seriesId, side, newName) => {
+      if (!canEdit) return;
+      const trimmed = newName.trim();
+      if (!trimmed) return;
+
+      if (seriesId === 'current') {
+        setTeamNames((prev) => ({ ...prev, [side]: trimmed }));
+        return;
+      }
+
+      setArchivedSeries((prev) =>
+        prev.map((series) => {
+          if (series.id !== seriesId) return series;
+          return {
+            ...series,
+            teamNames: { ...series.teamNames, [side]: trimmed },
+          };
+        }),
+      );
+    },
+    [canEdit],
+  );
+
+  const fixSeriesOurSide = useCallback(
+    (seriesId, ourSide) => {
+      if (!canEdit) return;
+      const normalized = ourSide === 'Red' ? 'Red' : 'Blue';
+      const configured = myTeamName.trim();
+
+      const applyToSeries = (series) => {
+        let nextTeamNames = { ...series.teamNames };
+        if (configured) {
+          nextTeamNames = syncOurTeamName(nextTeamNames, normalized, configured);
+        }
+        const games = (series.games ?? []).map((game) => ({ ...game, ourSide: normalized }));
+        return { ...series, teamNames: nextTeamNames, games };
+      };
+
+      if (seriesId === 'current') {
+        setOurSide(normalized);
+        if (configured) {
+          setTeamNames((names) => syncOurTeamName(names, normalized, configured));
+        }
+        setSeriesHistory((prev) => prev.map((game) => ({ ...game, ourSide: normalized })));
+        return;
+      }
+
+      setArchivedSeries((prev) =>
+        prev.map((series) => (series.id === seriesId ? applyToSeries(series) : series)),
+      );
+    },
+    [canEdit, myTeamName],
+  );
+
   const onSlotDragStart = useCallback(
     (e, slotId, championId) => {
       if (!canEditSlots()) {
@@ -992,6 +1066,8 @@ export function useBpSimulator() {
     updateGameWinner,
     updateGameOurSide,
     renameTeamNameGlobally,
+    renameSeriesTeamName,
+    fixSeriesOurSide,
     requestRemoveSeries,
     onSlotDragStart,
     onChampDragStart,
