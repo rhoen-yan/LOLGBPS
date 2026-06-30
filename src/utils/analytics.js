@@ -1,5 +1,6 @@
 import { LANES } from '../constants/lanes';
 import { isGameLaneComplete } from './pickLanes';
+import { getGameTeamNames } from './seriesStorage';
 
 export const ROLE_LABELS = LANES.map((lane) => lane.label);
 
@@ -16,23 +17,22 @@ export function getCurrentTeamNames(teamNames = DEFAULT_TEAM_NAMES) {
 
 export function collectGameContexts(archivedSeries, currentHistory, currentTeamNames, currentStartDate = null) {
   const contexts = [];
+  const currentSeriesStub = { teamNames: currentTeamNames ?? { Blue: '藍方', Red: '紅方' } };
   for (const series of archivedSeries ?? []) {
-    const teamNames = series.teamNames ?? { Blue: '藍方', Red: '紅方' };
     for (const game of series.games ?? []) {
       contexts.push({
         game,
-        teamNames,
+        teamNames: getGameTeamNames(game, series),
         startDate: series.startDate ?? null,
         seriesId: series.id,
         seriesLength: series.seriesLength ?? 5,
       });
     }
   }
-  const teamNames = currentTeamNames ?? { Blue: '藍方', Red: '紅方' };
   for (const game of currentHistory ?? []) {
     contexts.push({
       game,
-      teamNames,
+      teamNames: getGameTeamNames(game, currentSeriesStub),
       startDate: currentStartDate,
       seriesId: 'current',
       seriesLength: null,

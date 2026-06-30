@@ -10,9 +10,10 @@ import { isGameLaneComplete, seriesHasIncompleteLanes } from '../utils/pickLanes
 import {
   computeBoSeriesStats,
   filterSeriesGames,
+  getGameTeamName,
   getOurGameResult,
   getOurSeriesResult,
-  getSeriesTeamName,
+  getSeriesMatchupNames,
   seriesMatchesFilters,
 } from '../utils/seriesStorage';
 
@@ -20,49 +21,32 @@ function IncompleteLanesBadge() {
   return <span className="lane-incomplete-badge">尚有路線未標</span>;
 }
 
-function EditableSeriesTeamName({
-  side,
-  name,
-  seriesId,
-  canEdit,
-  onRenameSeries,
-  onRenameGlobal,
-}) {
+function EditableTeamName({ name, colorClass, canEdit, onSave }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
-  const [globalMode, setGlobalMode] = useState(false);
-  const color = side === 'Blue' ? 'text-blue-400' : 'text-red-400';
 
-  const commit = () => {
-    if (globalMode) onRenameGlobal(side, name, draft);
-    else onRenameSeries(seriesId, side, draft);
-    setEditing(false);
-    setGlobalMode(false);
-  };
-
-  const startEdit = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!canEdit) return;
-    setDraft(name);
-    setGlobalMode(e.shiftKey);
-    setEditing(true);
-  };
+  if (!canEdit) {
+    return <span className={colorClass}>{name}</span>;
+  }
 
   if (editing) {
     return (
       <input
         type="text"
-        className={`bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-sm min-w-[4rem] max-w-[8rem] ${color}`}
+        className={`bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-xs min-w-[4rem] max-w-[8rem] ${colorClass}`}
         value={draft}
         maxLength={20}
         autoFocus
-        onClick={(e) => e.stopPropagation()}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onBlur={() => {
+          onSave(draft);
+          setEditing(false);
+        }}
         onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter') commit();
+          if (e.key === 'Enter') {
+            onSave(draft);
+            setEditing(false);
+          }
           if (e.key === 'Escape') setEditing(false);
         }}
       />
@@ -71,36 +55,18 @@ function EditableSeriesTeamName({
 
   return (
     <span
-      className={`${color}${canEdit ? ' cursor-text' : ''}`}
-      onDoubleClick={startEdit}
+      className={`${colorClass} cursor-text`}
+      onDoubleClick={() => {
+        setDraft(name);
+        setEditing(true);
+      }}
     >
       {name}
     </span>
   );
 }
 
-function SeriesOurSideButtons({ seriesId, canEdit, onFix }) {
-  if (!canEdit) return null;
-  return (
-    <span className="ml-2 inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 hover:bg-blue-900/60"
-        onClick={() => onFix(seriesId, 'Blue')}
-      >
-        我方藍
-      </button>
-      <button
-        type="button"
-        className="text-[10px] px-1.5 py-0.5 rounded bg-rose-900/40 text-rose-400 hover:bg-rose-900/60"
-        onClick={() => onFix(seriesId, 'Red')}
-      >
-        我方紅
-      </button>
-    </span>
-  );
-}
-
+function ChampBanRow({ ids, champions, getChampionIconUrl }) {
   if (!ids?.length) {
     return <span className="text-xs text-gray-600">—</span>;
   }
@@ -201,6 +167,10 @@ function TeamHistory({
   picks,
   pickLanes,
   teamName,
+  seriesId,
+  gameNumber,
+  canEdit,
+  renameGameTeamName,
   champions,
   getChampionIconUrl,
   laneSelection,
@@ -212,7 +182,14 @@ function TeamHistory({
 
   return (
     <div>
-      <p className={`text-xs font-semibold ${teamColor} mb-2`}>{teamName}</p>
+      <p className="text-xs font-semibold mb-2">
+        <EditableTeamName
+          name={teamName}
+          colorClass={teamColor}
+          canEdit={canEdit}
+          onSave={(value) => renameGameTeamName(seriesId, gameNumber, side, value)}
+        />
+      </p>
       <p className="text-[10px] text-gray-500 mb-1">Ban</p>
       <div className="flex flex-wrap gap-2 mb-3">
         <ChampBanRow ids={bans} champions={champions} getChampionIconUrl={getChampionIconUrl} />
@@ -256,6 +233,7 @@ function GameRecord({
   updateGamePickLane,
   updateGameWinner,
   updateGameOurSide,
+  renameGameTeamName,
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
@@ -264,8 +242,8 @@ function GameRecord({
   const [laneSelection, setLaneSelection] = useState(null);
   const winnerCls = record.winner === 'Blue' ? 'winner-blue' : 'winner-red';
   const winnerColor = record.winner === 'Blue' ? 'text-blue-400' : 'text-red-400';
-  const blueName = getSeriesTeamName(series, 'Blue');
-  const redName = getSeriesTeamName(series, 'Red');
+  const blueName = getGameTeamName(record, series, 'Blue');
+  const redName = getGameTeamName(record, series, 'Red');
   const winnerName = record.winner === 'Blue' ? blueName : redName;
   const otherWinner = record.winner === 'Blue' ? 'Red' : 'Blue';
   const otherWinnerName = otherWinner === 'Blue' ? blueName : redName;
@@ -356,6 +334,10 @@ function GameRecord({
           picks={record.bluePicks}
           pickLanes={record.bluePickLanes}
           teamName={blueName}
+          seriesId={series.id}
+          gameNumber={record.game}
+          canEdit={canEdit}
+          renameGameTeamName={renameGameTeamName}
           champions={champions}
           getChampionIconUrl={getChampionIconUrl}
           laneSelection={laneSelection}
@@ -368,6 +350,10 @@ function GameRecord({
           picks={record.redPicks}
           pickLanes={record.redPickLanes}
           teamName={redName}
+          seriesId={series.id}
+          gameNumber={record.game}
+          canEdit={canEdit}
+          renameGameTeamName={renameGameTeamName}
           champions={champions}
           getChampionIconUrl={getChampionIconUrl}
           laneSelection={laneSelection}
@@ -444,15 +430,12 @@ function SeriesGroup({
   updateSeriesEvent,
   removeSeriesEvent,
   requestRemoveSeries,
-  renameTeamNameGlobally,
-  renameSeriesTeamName,
-  fixSeriesOurSide,
+  renameGameTeamName,
   canEdit,
   filters,
 }) {
   const [isOpen, setIsOpen] = useState(true);
-  const blueName = getSeriesTeamName(series, 'Blue');
-  const redName = getSeriesTeamName(series, 'Red');
+  const [teamA, teamB] = getSeriesMatchupNames(series);
   const seriesResult = getOurSeriesResult(series);
   const seriesLanesIncomplete = seriesHasIncompleteLanes(series);
   const filteredGames = useMemo(
@@ -471,24 +454,9 @@ function SeriesGroup({
       <summary className="history-series-summary cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-lg">
         <span className="history-series-summary-content">
           <span className="mr-2">{formatSeriesLabel(series.seriesLength)}</span>
-          <EditableSeriesTeamName
-            side="Blue"
-            name={blueName}
-            seriesId={series.id}
-            canEdit={canEdit}
-            onRenameSeries={renameSeriesTeamName}
-            onRenameGlobal={renameTeamNameGlobally}
-          />
+          <span className="text-gray-300">{teamA}</span>
           <span className="text-gray-500 mx-1.5">vs</span>
-          <EditableSeriesTeamName
-            side="Red"
-            name={redName}
-            seriesId={series.id}
-            canEdit={canEdit}
-            onRenameSeries={renameSeriesTeamName}
-            onRenameGlobal={renameTeamNameGlobally}
-          />
-          <SeriesOurSideButtons seriesId={series.id} canEdit={canEdit} onFix={fixSeriesOurSide} />
+          <span className="text-gray-300">{teamB}</span>
           <span className="text-gray-400 mx-2">·</span>
           <span className="tabular-nums text-gray-300">
             {series.finalScore.Blue}:{series.finalScore.Red}
@@ -527,6 +495,7 @@ function SeriesGroup({
             updateGamePickLane={updateGamePickLane}
             updateGameWinner={updateGameWinner}
             updateGameOurSide={updateGameOurSide}
+            renameGameTeamName={renameGameTeamName}
             addSeriesEvent={addSeriesEvent}
             updateSeriesEvent={updateSeriesEvent}
             removeSeriesEvent={removeSeriesEvent}
@@ -556,9 +525,7 @@ export default function SeriesHistoryPanel() {
     updateSeriesEvent,
     removeSeriesEvent,
     requestRemoveSeries,
-    renameTeamNameGlobally,
-    renameSeriesTeamName,
-    fixSeriesOurSide,
+    renameGameTeamName,
     canEdit,
   } = useBp();
 
@@ -717,9 +684,7 @@ export default function SeriesHistoryPanel() {
                     updateSeriesEvent={updateSeriesEvent}
                     removeSeriesEvent={removeSeriesEvent}
                     requestRemoveSeries={requestRemoveSeries}
-                    renameTeamNameGlobally={renameTeamNameGlobally}
-                    renameSeriesTeamName={renameSeriesTeamName}
-                    fixSeriesOurSide={fixSeriesOurSide}
+                    renameGameTeamName={renameGameTeamName}
                     canEdit={canEdit}
                     filters={filters}
                   />

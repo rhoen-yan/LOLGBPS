@@ -25,7 +25,7 @@ import {
   buildSeriesRecordPayload,
   computeScoreFromGames,
   formatDateYmd,
-  getSeriesTeamName,
+  getSeriesMatchupNames,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -544,11 +544,10 @@ export function useBpSimulator() {
   const requestRemoveSeries = useCallback(
     (series) => {
       if (!canEdit) return;
-      const blueName = getSeriesTeamName(series, 'Blue');
-      const redName = getSeriesTeamName(series, 'Red');
+      const [teamA, teamB] = getSeriesMatchupNames(series);
       showConfirmModal(
         '確認移除系列賽',
-        `確定要移除 ${formatSeriesLabel(series.seriesLength)} ${blueName} vs ${redName}？此操作無法復原。`,
+        `確定要移除 ${formatSeriesLabel(series.seriesLength)} ${teamA} vs ${teamB}？此操作無法復原。`,
         () => {
           if (series.id === 'current') {
             clearCurrentSeries();
@@ -647,6 +646,8 @@ export function useBpSimulator() {
           game: currentGameNumber,
           winner: winningTeam,
           ourSide,
+          blueTeamName: getTeamName('Blue'),
+          redTeamName: getTeamName('Red'),
           blueBans: [...bpState.teamData.Blue.bans],
           redBans: [...bpState.teamData.Red.bans],
           bluePicks: [...bpState.teamData.Blue.picks],
@@ -811,86 +812,18 @@ export function useBpSimulator() {
     [canEdit, patchSeriesGame],
   );
 
-  const renameTeamNameGlobally = useCallback(
-    (side, oldName, newName) => {
-      if (!canEdit) return;
-      const trimmed = newName.trim();
-      if (!trimmed || trimmed === oldName) return;
-
-      setArchivedSeries((prev) =>
-        prev.map((series) => {
-          if (getSeriesTeamName(series, side) !== oldName) return series;
-          return {
-            ...series,
-            teamNames: { ...series.teamNames, [side]: trimmed },
-          };
-        }),
-      );
-
-      setTeamNames((prev) => {
-        const current = getSeriesTeamName({ teamNames: prev }, side);
-        if (current !== oldName) return prev;
-        return { ...prev, [side]: trimmed };
-      });
-
-      setMyTeamName((prev) => (prev.trim() === oldName ? trimmed : prev));
-    },
-    [canEdit],
-  );
-
-  const renameSeriesTeamName = useCallback(
-    (seriesId, side, newName) => {
+  const renameGameTeamName = useCallback(
+    (seriesId, gameNumber, side, newName) => {
       if (!canEdit) return;
       const trimmed = newName.trim();
       if (!trimmed) return;
-
-      if (seriesId === 'current') {
-        setTeamNames((prev) => ({ ...prev, [side]: trimmed }));
-        return;
-      }
-
-      setArchivedSeries((prev) =>
-        prev.map((series) => {
-          if (series.id !== seriesId) return series;
-          return {
-            ...series,
-            teamNames: { ...series.teamNames, [side]: trimmed },
-          };
-        }),
-      );
+      const key = side === 'Blue' ? 'blueTeamName' : 'redTeamName';
+      patchSeriesGame(seriesId, gameNumber, (game) => {
+        if (game[key] === trimmed) return game;
+        return { ...game, [key]: trimmed };
+      });
     },
-    [canEdit],
-  );
-
-  const fixSeriesOurSide = useCallback(
-    (seriesId, ourSide) => {
-      if (!canEdit) return;
-      const normalized = ourSide === 'Red' ? 'Red' : 'Blue';
-      const configured = myTeamName.trim();
-
-      const applyToSeries = (series) => {
-        let nextTeamNames = { ...series.teamNames };
-        if (configured) {
-          nextTeamNames = syncOurTeamName(nextTeamNames, normalized, configured);
-        }
-        const games = (series.games ?? []).map((game) => ({ ...game, ourSide: normalized }));
-        return { ...series, teamNames: nextTeamNames, games };
-      };
-
-      if (seriesId === 'current') {
-        setOurSide(normalized);
-        if (configured) {
-          setTeamNames((names) => syncOurTeamName(names, normalized, configured));
-        }
-        setSeriesHistory((prev) => prev.map((game) => ({ ...game, ourSide: normalized })));
-        return;
-      }
-
-      setArchivedSeries((prev) =>
-        prev.map((series) => (series.id === seriesId ? applyToSeries(series) : series)),
-      );
-    },
-    [canEdit, myTeamName],
+    [canEdit, patchSeriesGame],
   );
 
   const onSlotDragStart = useCallback(
@@ -1065,9 +998,7 @@ export function useBpSimulator() {
     removeSeriesEvent,
     updateGameWinner,
     updateGameOurSide,
-    renameTeamNameGlobally,
-    renameSeriesTeamName,
-    fixSeriesOurSide,
+    renameGameTeamName,
     requestRemoveSeries,
     onSlotDragStart,
     onChampDragStart,

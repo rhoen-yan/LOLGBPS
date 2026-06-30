@@ -31,6 +31,8 @@ function normalizeHistoryEntry(entry, legacyOurSide = null) {
     game: entry.game,
     winner: entry.winner === 'Red' ? 'Red' : 'Blue',
     ourSide,
+    blueTeamName: typeof entry.blueTeamName === 'string' ? entry.blueTeamName : '',
+    redTeamName: typeof entry.redTeamName === 'string' ? entry.redTeamName : '',
     blueBans: Array.isArray(entry.blueBans) ? entry.blueBans.filter((id) => typeof id === 'string') : [],
     redBans: Array.isArray(entry.redBans) ? entry.redBans.filter((id) => typeof id === 'string') : [],
     bluePicks: Array.isArray(entry.bluePicks) ? entry.bluePicks.filter((id) => typeof id === 'string') : [],
@@ -233,6 +235,46 @@ export function getSeriesTeamName(series, side) {
   return series.teamNames?.[side] || (side === 'Blue' ? '藍方' : '紅方');
 }
 
+export function getGameTeamName(game, series, side) {
+  const key = side === 'Blue' ? 'blueTeamName' : 'redTeamName';
+  const fromGame = typeof game?.[key] === 'string' ? game[key].trim() : '';
+  if (fromGame) return fromGame;
+  return getSeriesTeamName(series, side);
+}
+
+export function getGameTeamNames(game, series) {
+  return {
+    Blue: getGameTeamName(game, series, 'Blue'),
+    Red: getGameTeamName(game, series, 'Red'),
+  };
+}
+
+export function getSeriesMatchupNames(series) {
+  const seen = new Set();
+  const names = [];
+  for (const game of series.games ?? []) {
+    for (const side of ['Blue', 'Red']) {
+      const name = getGameTeamName(game, series, side);
+      if (!seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+  }
+  if (names.length >= 2) return [names[0], names[1]];
+  if (names.length === 1) return [names[0], getSeriesTeamName(series, 'Red')];
+  return [getSeriesTeamName(series, 'Blue'), getSeriesTeamName(series, 'Red')];
+}
+
+function seriesMatchesTeamQuery(series, teamQ) {
+  for (const game of series.games ?? []) {
+    const blue = getGameTeamName(game, series, 'Blue').toLocaleLowerCase('zh-Hant');
+    const red = getGameTeamName(game, series, 'Red').toLocaleLowerCase('zh-Hant');
+    if (blue.includes(teamQ) || red.includes(teamQ)) return true;
+  }
+  return false;
+}
+
 export function getOurGameResult(game, ourSide) {
   if (!ourSide) return null;
   if (game.winner === ourSide) return 'win';
@@ -281,9 +323,7 @@ export function computeBoSeriesStats(seriesList, { dateFilter = '', teamFilter =
   for (const series of seriesList) {
     if (dateFilter && series.startDate !== dateFilter) continue;
     if (teamQ) {
-      const blue = getSeriesTeamName(series, 'Blue').toLocaleLowerCase('zh-Hant');
-      const red = getSeriesTeamName(series, 'Red').toLocaleLowerCase('zh-Hant');
-      if (!blue.includes(teamQ) && !red.includes(teamQ)) continue;
+      if (!seriesMatchesTeamQuery(series, teamQ)) continue;
     }
     if (!isSeriesDecided(series)) continue;
     const result = getOurSeriesResult(series);
@@ -302,9 +342,7 @@ export function seriesMatchesFilters(series, { dateFilter, teamFilter, resultFil
 
   const teamQ = teamFilter.trim().toLocaleLowerCase('zh-Hant');
   if (teamQ) {
-    const blue = getSeriesTeamName(series, 'Blue').toLocaleLowerCase('zh-Hant');
-    const red = getSeriesTeamName(series, 'Red').toLocaleLowerCase('zh-Hant');
-    if (!blue.includes(teamQ) && !red.includes(teamQ)) return false;
+    if (!seriesMatchesTeamQuery(series, teamQ)) return false;
   }
 
   if (resultFilter === 'all') return true;
