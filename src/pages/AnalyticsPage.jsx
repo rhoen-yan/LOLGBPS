@@ -546,15 +546,9 @@ export default function AnalyticsPage() {
             <>
               <OverviewCards overview={data.overview} />
               {hasOurData && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wide">我方路線分布</h4>
-                    <LanePresenceBar rows={data.ourLanePresence} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wide">對手路線分布</h4>
-                    <LanePresenceBar rows={data.enemyLanePresence} />
-                  </div>
+                <div>
+                  <h4 className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wide">對手路線分布</h4>
+                  <LanePresenceBar rows={data.enemyLanePresence} />
                 </div>
               )}
             </>

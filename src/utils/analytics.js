@@ -556,7 +556,6 @@ export function computeFullAnalytics(ourContexts, allContexts, filters, analyzeT
     our: computeOurSideAnalytics(games),
     ourSplit: computeOurSideSplit(analyzedOur),
     ourChampionLane: computeOurChampionLaneStats(analyzedOur),
-    ourLanePresence: computeLanePresenceStats(analyzedOur, 'our'),
     enemy: computeEnemyOverview(analyzedOur),
     enemyLanePresence: computeLanePresenceStats(analyzedOur, 'enemy'),
     enemyGrouped: computeEnemyGroupedAnalytics(analyzedOur),
