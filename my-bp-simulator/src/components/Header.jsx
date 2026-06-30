@@ -24,6 +24,7 @@ export default function Header() {
     ourSide,
     toggleOurSide,
     canChangeOurSide,
+    ourSideAutoApplied,
     teamsBarFlash,
   } = useBp();
 
@@ -39,7 +40,7 @@ export default function Header() {
                 type="checkbox"
                 className="accent-blue-500"
                 checked={ourSide === 'Blue'}
-                disabled={!canChangeOurSide}
+                disabled={!canChangeOurSide || ourSideAutoApplied}
                 onChange={() => toggleOurSide('Blue')}
               />
               我方
@@ -78,7 +79,7 @@ export default function Header() {
                 type="checkbox"
                 className="accent-red-500"
                 checked={ourSide === 'Red'}
-                disabled={!canChangeOurSide}
+                disabled={!canChangeOurSide || ourSideAutoApplied}
                 onChange={() => toggleOurSide('Red')}
               />
               我方

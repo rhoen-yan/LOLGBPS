@@ -17,6 +17,9 @@ export default function AppNav() {
       <NavLink to="/analytics" className={linkClass}>
         分析
       </NavLink>
+      <NavLink to="/settings" className={linkClass}>
+        設置
+      </NavLink>
     </nav>
   );
 }

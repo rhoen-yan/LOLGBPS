@@ -16,6 +16,7 @@ import {
   buildSeriesRecordPayload,
   formatDateYmd,
   getSeriesTeamName,
+  resolveOurSideFromTeamNames,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -34,6 +35,7 @@ export function useBpSimulator() {
   const [championLoadErrorMessage, setChampionLoadErrorMessage] = useState('');
 
   const [teamNames, setTeamNames] = useState({ Blue: '藍方', Red: '紅方' });
+  const [myTeamName, setMyTeamName] = useState('');
   const [archivedSeries, setArchivedSeries] = useState([]);
   const [seriesStartDate, setSeriesStartDate] = useState(null);
   const [ourSide, setOurSide] = useState(null);
@@ -99,6 +101,14 @@ export function useBpSimulator() {
     setTeamNames((prev) => ({ ...prev, [side]: value }));
   }, []);
 
+  const updateMyTeamNameInput = useCallback((value) => {
+    setMyTeamName(value);
+  }, []);
+
+  const saveMyTeamName = useCallback((value) => {
+    setMyTeamName(value.trim());
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -107,6 +117,7 @@ export function useBpSimulator() {
       const savedCurrent = saved?.current;
       if (saved?.archivedSeries) setArchivedSeries(saved.archivedSeries);
       if (saved?.teamNames) setTeamNames(saved.teamNames);
+      if (saved?.settings?.myTeamName) setMyTeamName(saved.settings.myTeamName);
       if (savedCurrent) {
         setSeriesStartDate(savedCurrent.startDate ?? null);
         setOurSide(savedCurrent.ourSide ?? null);
@@ -135,6 +146,7 @@ export function useBpSimulator() {
       buildSeriesRecordPayload({
         archivedSeries,
         teamNames,
+        settings: { myTeamName },
         current: {
           startDate: seriesStartDate,
           ourSide,
@@ -150,6 +162,7 @@ export function useBpSimulator() {
     recordHydrated,
     archivedSeries,
     teamNames,
+    myTeamName,
     seriesStartDate,
     ourSide,
     seriesHistory,
@@ -428,9 +441,24 @@ export function useBpSimulator() {
     showModal('已重置', `${formatSeriesLabel(seriesLength)} 系列賽已重置，Pick 禁用清單已清除。`);
   }, [archiveCurrentSeries, resetGame, showModal, seriesLength]);
 
-  const toggleOurSide = useCallback((side) => {
-    setOurSide((prev) => (prev === side ? null : side));
-  }, []);
+  const autoOurSide = useMemo(
+    () => resolveOurSideFromTeamNames(teamNames, myTeamName),
+    [teamNames, myTeamName],
+  );
+  const ourSideAutoApplied = Boolean(autoOurSide && myTeamName.trim());
+
+  useEffect(() => {
+    if (!recordHydrated || seriesEnded || !autoOurSide) return;
+    setOurSide(autoOurSide);
+  }, [recordHydrated, autoOurSide, seriesEnded]);
+
+  const toggleOurSide = useCallback(
+    (side) => {
+      if (ourSideAutoApplied) return;
+      setOurSide((prev) => (prev === side ? null : side));
+    },
+    [ourSideAutoApplied],
+  );
 
   const startDraft = useCallback(() => {
     if (bpState.currentStep > 0) return;
@@ -709,6 +737,10 @@ export function useBpSimulator() {
     championLoadStatus,
     championLoadErrorMessage,
     teamNames,
+    myTeamName,
+    saveMyTeamName,
+    updateMyTeamNameInput,
+    ourSideAutoApplied,
     currentSeriesScore,
     currentGameNumber,
     seriesLength,

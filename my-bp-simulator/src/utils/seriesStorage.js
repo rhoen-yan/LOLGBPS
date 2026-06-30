@@ -55,6 +55,24 @@ function normalizeOurSide(value) {
   return value === 'Red' ? 'Red' : value === 'Blue' ? 'Blue' : null;
 }
 
+function normalizeSettings(settings) {
+  return {
+    myTeamName: typeof settings?.myTeamName === 'string' ? settings.myTeamName.trim() : '',
+  };
+}
+
+export function resolveOurSideFromTeamNames(teamNames, myTeamName) {
+  const q = myTeamName?.trim();
+  if (!q) return null;
+  const blue = (teamNames?.Blue ?? '').trim();
+  const red = (teamNames?.Red ?? '').trim();
+  const blueMatch = blue === q;
+  const redMatch = red === q;
+  if (blueMatch && !redMatch) return 'Blue';
+  if (redMatch && !blueMatch) return 'Red';
+  return null;
+}
+
 function normalizeTeamNames(names, fallback = { Blue: '藍方', Red: '紅方' }) {
   return {
     Blue: typeof names?.Blue === 'string' && names.Blue ? names.Blue : fallback.Blue,
@@ -118,11 +136,12 @@ export function parseSeriesRecord(data) {
       : [];
     const current = normalizeCurrentSeries(data.current);
     const teamNames = normalizeTeamNames(data.teamNames);
-    return { archivedSeries, current, teamNames };
+    const settings = normalizeSettings(data.settings);
+    return { archivedSeries, current, teamNames, settings };
   }
 
   const migrated = migrateV1(data);
-  return { ...migrated, teamNames: normalizeTeamNames() };
+  return { ...migrated, teamNames: normalizeTeamNames(), settings: normalizeSettings() };
 }
 
 export function loadSeriesRecord() {
@@ -135,20 +154,21 @@ export function loadSeriesRecord() {
   }
 }
 
-export function buildSeriesRecordPayload({ archivedSeries, current, teamNames }) {
+export function buildSeriesRecordPayload({ archivedSeries, current, teamNames, settings }) {
   return {
     version: 2,
     teamNames: normalizeTeamNames(teamNames),
+    settings: normalizeSettings(settings),
     archivedSeries,
     current,
   };
 }
 
-export function saveSeriesRecord({ archivedSeries, current, teamNames }) {
+export function saveSeriesRecord({ archivedSeries, current, teamNames, settings }) {
   try {
     localStorage.setItem(
       STORAGE_SERIES,
-      JSON.stringify(buildSeriesRecordPayload({ archivedSeries, current, teamNames })),
+      JSON.stringify(buildSeriesRecordPayload({ archivedSeries, current, teamNames, settings })),
     );
   } catch (err) {
     console.error('系列賽紀錄儲存失敗', err);
