@@ -254,8 +254,7 @@ function GameRecord({
   const otherOurSideName = otherOurSide === 'Blue' ? blueName : redName;
   const gameChampions = getGameChampionsFromIds(collectGameChampionIds(record), champions);
   const lanesIncomplete = !isGameLaneComplete(record);
-  const isCurrentSeries = Boolean(series.isCurrent);
-  const readOnly = !isCurrentSeries || !canEdit;
+  const readOnly = !canEdit;
 
   const handlePickSelect = (side, index) => {
     if (readOnly) return;
