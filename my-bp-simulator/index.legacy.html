@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ban/Pick 模擬器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg: #111318;
+            --surface: #1a1d24;
+            --border: #2a2f3a;
+            --blue: #3b82f6;
+            --red: #ef4444;
+            --accent: #eab308;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --container-max: 1400px;
+            --arena-min-h: 600px;
+            --slot-gap: 10px;
+            --pick-col-padding: 12px;
+            --pick-area-offset: 5.25rem;
+            --pick-slot-size: calc((var(--arena-min-h) - var(--pick-area-offset) - 4 * var(--slot-gap)) / 5);
+            --side-col: calc(var(--pick-slot-size) + 2 * var(--pick-col-padding));
+            --slot-ban-size: 68px;
+            --scrollbar-track: #151820;
+            --scrollbar-thumb: #3a4150;
+            --scrollbar-thumb-hover: #4f5868;
+        }
+        .custom-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 4px;
+            border: 2px solid var(--scrollbar-track);
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover);
+        }
+        .custom-scroll::-webkit-scrollbar-corner {
+            background: var(--scrollbar-track);
+        }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        .draft-arena {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            overflow: hidden;
+        }
+        .ban-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            gap: 24px;
+        }
+        .ban-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .ban-group-blue { align-items: flex-start; }
+        .ban-group-red { align-items: flex-end; }
+        .ban-slots {
+            display: flex;
+            gap: var(--slot-gap);
+        }
+        .draft-main {
+            display: grid;
+            grid-template-columns: var(--side-col) 1fr var(--side-col);
+            height: var(--arena-min-h);
+            min-height: var(--arena-min-h);
+            align-items: stretch;
+        }
+        @media (max-width: 768px) {
+            .draft-main {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                min-height: auto;
+            }
+            .pick-column {
+                flex-direction: row !important;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+            }
+            .pick-slots {
+                display: grid !important;
+                grid-template-columns: repeat(5, 1fr) !important;
+                grid-template-rows: none !important;
+                flex: 1 1 100%;
+            }
+            .slot-pick {
+                width: 100%;
+                height: auto;
+                aspect-ratio: 1 / 1;
+            }
+        }
+        .pick-column {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            padding: 12px 0;
+            gap: 8px;
+            min-height: 0;
+            height: 100%;
+        }
+        .pick-column-blue {
+            border-right: 2px solid color-mix(in srgb, var(--blue) 50%, var(--border));
+            background: color-mix(in srgb, var(--blue) 6%, var(--surface));
+        }
+        .pick-column-red {
+            border-left: 2px solid color-mix(in srgb, var(--red) 50%, var(--border));
+            background: color-mix(in srgb, var(--red) 6%, var(--surface));
+        }
+        .side-label,
+        .ban-label {
+            padding: 0 10px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .side-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+        .ban-label {
+            font-size: 10px;
+            color: var(--muted);
+        }
+        .pick-slots {
+            display: grid;
+            grid-template-rows: repeat(5, minmax(0, 1fr));
+            gap: var(--slot-gap);
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            padding: 0 var(--pick-col-padding);
+            box-sizing: border-box;
+            align-content: stretch;
+            justify-items: center;
+        }
+        .champion-area {
+            display: flex;
+            flex-direction: column;
+            padding: 12px 14px;
+            min-width: 0;
+            min-height: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        #champion-grid {
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+        }
+        .slot-ban {
+            width: var(--slot-ban-size);
+            height: var(--slot-ban-size);
+            min-width: var(--slot-ban-size);
+        }
+        .slot-pick {
+            width: var(--pick-slot-size);
+            height: var(--pick-slot-size);
+            aspect-ratio: 1 / 1;
+            place-self: center;
+        }
+        .slot {
+            background: #252932;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .slot-num {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #4b5563;
+            user-select: none;
+        }
+        .slot-active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+        }
+        .slot-drag-over {
+            border-color: var(--accent);
+            background: color-mix(in srgb, var(--accent) 12%, #252932);
+        }
+        .slot-filled[draggable="true"] {
+            cursor: grab;
+        }
+        .slot-filled.dragging {
+            opacity: 0.45;
+            cursor: grabbing;
+        }
+        .champ-card.draggable-champ {
+            cursor: grab;
+        }
+        .champ-card.dragging {
+            opacity: 0.45;
+            cursor: grabbing;
+        }
+        .slot-ban-done { border-color: #6b7280; }
+        .slot-pick-blue { border-color: var(--blue); }
+        .slot-pick-red { border-color: var(--red); }
+        .ban-x {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--red);
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .champ-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #252932;
+            transition: border-color .15s, transform .15s;
+        }
+        .champ-card:not(.disabled):hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+        .champ-card.disabled { opacity: .35; pointer-events: none; }
+        .champ-card.series-banned { opacity: .5; pointer-events: none; border-color: var(--red); }
+        .series-tag {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(127,29,29,.75);
+            font-size: 11px;
+            font-weight: 600;
+        }
+        @media (min-width: 640px) { #champion-grid { grid-template-columns: repeat(7, 1fr); } }
+        @media (min-width: 1024px) { #champion-grid { grid-template-columns: repeat(9, 1fr); } }
+        @media (min-width: 1400px) { #champion-grid { grid-template-columns: repeat(10, 1fr); } }
+        .team-input {
+            background: #252932;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 14px;
+            font-weight: 600;
+            width: 120px;
+            text-align: center;
+        }
+        .team-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .history-item { border-left: 3px solid var(--border); }
+        .history-item.winner-blue { border-left-color: var(--blue); }
+        .history-item.winner-red { border-left-color: var(--red); }
+        .history-note {
+            width: 100%;
+            margin-top: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            background: #252932;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text);
+            resize: vertical;
+            min-height: 2.5rem;
+        }
+        .history-note:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .history-champ-ban img {
+            filter: grayscale(0.4);
+            opacity: 0.85;
+        }
+    </style>
+</head>
+<body class="my-0 mx-auto p-4 md:p-8 w-full max-w-[var(--container-max)]">
+
+    <header class="panel p-6 mb-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <input id="blue-team-name" class="team-input text-blue-400" maxlength="20" placeholder="藍方隊名">
+                    <span class="text-2xl font-bold tabular-nums" id="blue-score">0</span>
+                </div>
+                <span class="text-lg font-semibold text-gray-500">BO5</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl font-bold tabular-nums" id="red-score">0</span>
+                    <input id="red-team-name" class="team-input text-red-400" maxlength="20" placeholder="紅方隊名">
+                </div>
+            </div>
+
+            <div class="text-center">
+                <p class="text-sm text-gray-500 mb-1">第 <span id="game-number" class="font-semibold text-white">1</span> 局</p>
+                <p id="current-phase-text" class="text-base font-medium text-yellow-400">選角尚未開始</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2 justify-center lg:justify-end">
+                <button id="startButton" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition" onclick="startDraft()">開始選角</button>
+                <button id="resetGameButton" class="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed" onclick="resetCurrentGame()" disabled>重置本局</button>
+                <button class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold transition" onclick="resetSeries()">重置系列賽</button>
+            </div>
+        </div>
+
+        <div id="winner-buttons" class="hidden mt-4 pt-4 border-t border-gray-700 flex flex-wrap items-center justify-center gap-3">
+            <span class="text-sm text-gray-400">宣告本局勝利：</span>
+            <button class="px-4 py-2 mr-[5px] rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold" onclick="declareWinner('Blue')">藍方勝</button>
+            <button class="px-4 py-2 mr-[5px] rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold" onclick="declareWinner('Red')">紅方勝</button>
+        </div>
+    </header>
+
+    <section class="panel draft-arena mb-6">
+        <div class="ban-bar">
+            <div class="ban-group ban-group-blue">
+                <span id="blue-bans-label" class="ban-label">Ban 0/5</span>
+                <div id="blue-bans" class="ban-slots"></div>
+            </div>
+            <div class="ban-group ban-group-red">
+                <span id="red-bans-label" class="ban-label">Ban 0/5</span>
+                <div id="red-bans" class="ban-slots"></div>
+            </div>
+        </div>
+
+        <div class="draft-main">
+            <div class="pick-column pick-column-blue">
+                <span class="side-label text-blue-400" id="blue-side-label">藍方</span>
+                <span id="blue-picks-label" class="ban-label">Pick 0/5</span>
+                <div id="blue-picks" class="pick-slots"></div>
+            </div>
+
+            <div class="champion-area">
+                <div class="flex flex-col sm:flex-row gap-2 mb-3">
+                    <input type="text" id="champion-search" placeholder="搜尋英雄…" class="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm focus:outline-none focus:border-yellow-500" oninput="renderChampions()">
+                    <span id="select-message" class="text-xs text-gray-500 self-center whitespace-nowrap">載入中…</span>
+                </div>
+                <div id="champion-grid" class="grid overflow-y-auto p-1 custom-scroll"></div>
+            </div>
+
+            <div class="pick-column pick-column-red">
+                <span class="side-label text-red-400" id="red-side-label">紅方</span>
+                <span id="red-picks-label" class="ban-label">Pick 0/5</span>
+                <div id="red-picks" class="pick-slots"></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel p-6 mb-6">
+        <h3 class="text-base font-bold mb-1">系列賽紀錄</h3>
+        <p class="text-xs text-gray-500 mb-4">已 Pick 的英雄在系列賽中不可再選；Ban 不受此限制。</p>
+        <div id="series-history-log" class="space-y-3 max-h-96 overflow-y-auto custom-scroll">
+            <p class="text-sm text-gray-500">尚無紀錄</p>
+        </div>
+    </section>
+
+    <div id="modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+        <div class="panel p-6 w-full max-w-sm">
+            <h3 id="modal-title" class="text-lg font-bold mb-2">訊息</h3>
+            <p id="modal-text" class="text-sm text-gray-400 mb-5"></p>
+            <div id="modal-actions-alert">
+                <button class="w-full py-2 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-semibold text-sm" onclick="hideModal()">了解</button>
+            </div>
+            <div id="modal-actions-confirm" class="hidden flex gap-2">
+                <button class="flex-1 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-semibold text-sm" onclick="hideModal()">取消</button>
+                <button id="modal-confirm-btn" class="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm">確認重置</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_BLUE = 'bp-blue-team-name';
+        const STORAGE_RED = 'bp-red-team-name';
+        const DEFAULT_DDRAGON_VERSION = '14.19.1';
+
+        const DRAFT_FLOW = [
+            { step: 1, type: 'Ban', team: 'Blue', description: 'B1' },
+            { step: 2, type: 'Ban', team: 'Red', description: 'B1' },
+            { step: 3, type: 'Ban', team: 'Blue', description: 'B2' },
+            { step: 4, type: 'Ban', team: 'Red', description: 'B2' },
+            { step: 5, type: 'Ban', team: 'Blue', description: 'B3' },
+            { step: 6, type: 'Ban', team: 'Red', description: 'B3' },
+            { step: 7, type: 'Pick', team: 'Blue', description: 'P1' },
+            { step: 8, type: 'Pick', team: 'Red', description: 'P1' },
+            { step: 9, type: 'Pick', team: 'Red', description: 'P2' },
+            { step: 10, type: 'Pick', team: 'Blue', description: 'P2' },
+            { step: 11, type: 'Pick', team: 'Blue', description: 'P3' },
+            { step: 12, type: 'Pick', team: 'Red', description: 'P3' },
+            { step: 13, type: 'Ban', team: 'Blue', description: 'B4' },
+            { step: 14, type: 'Ban', team: 'Red', description: 'B4' },
+            { step: 15, type: 'Ban', team: 'Blue', description: 'B5' },
+            { step: 16, type: 'Ban', team: 'Red', description: 'B5' },
+            { step: 17, type: 'Pick', team: 'Red', description: 'P4' },
+            { step: 18, type: 'Pick', team: 'Blue', description: 'P4' },
+            { step: 19, type: 'Pick', team: 'Blue', description: 'P5' },
+            { step: 20, type: 'Pick', team: 'Red', description: 'P5' },
+        ];
+
+        let ddragonVersion = DEFAULT_DDRAGON_VERSION;
+        let champions = [];
+        let championLoadStatus = 'idle';
+        let championLoadErrorMessage = '';
+
+        let teamNames = { Blue: '藍方', Red: '紅方' };
+        let currentSeriesScore = { Blue: 0, Red: 0 };
+        let currentGameNumber = 1;
+        let seriesHistory = [];
+        let seriesPickedChampions = new Set();
+        let currentBPState = {
+            currentStep: 0,
+            selectedChampions: new Set(),
+            banCounts: { Blue: 0, Red: 0 },
+            pickCounts: { Blue: 0, Red: 0 },
+            teamData: { Blue: { bans: [], picks: [] }, Red: { bans: [], picks: [] } },
+        };
+
+        const championGrid = document.getElementById('champion-grid');
+        const phaseText = document.getElementById('current-phase-text');
+        const startButton = document.getElementById('startButton');
+        const resetGameButton = document.getElementById('resetGameButton');
+        const searchInput = document.getElementById('champion-search');
+        const selectMessage = document.getElementById('select-message');
+        const winnerButtons = document.getElementById('winner-buttons');
+        const seriesHistoryLog = document.getElementById('series-history-log');
+        const blueTeamInput = document.getElementById('blue-team-name');
+        const redTeamInput = document.getElementById('red-team-name');
+
+        let dragPayload = null;
+
+        const getChampionIconUrl = (id) =>
+            `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`;
+
+        function getTeamName(side) {
+            return teamNames[side] || (side === 'Blue' ? '藍方' : '紅方');
+        }
+
+        function loadTeamNames() {
+            const savedBlue = localStorage.getItem(STORAGE_BLUE);
+            const savedRed = localStorage.getItem(STORAGE_RED);
+            teamNames.Blue = savedBlue || '藍方';
+            teamNames.Red = savedRed || '紅方';
+            blueTeamInput.value = teamNames.Blue;
+            redTeamInput.value = teamNames.Red;
+            updateTeamLabels();
+        }
+
+        function saveTeamName(side, value) {
+            const trimmed = value.trim() || (side === 'Blue' ? '藍方' : '紅方');
+            teamNames[side] = trimmed;
+            localStorage.setItem(side === 'Blue' ? STORAGE_BLUE : STORAGE_RED, trimmed);
+            updateTeamLabels();
+            renderSeriesHistory();
+            updatePhaseDisplay();
+        }
+
+        function updateTeamLabels() {
+            document.getElementById('blue-side-label').textContent = getTeamName('Blue');
+            document.getElementById('red-side-label').textContent = getTeamName('Red');
+            document.querySelectorAll('[data-winner-blue]').forEach(el => {
+                el.textContent = getTeamName('Blue') + ' 勝';
+            });
+            document.querySelectorAll('[data-winner-red]').forEach(el => {
+                el.textContent = getTeamName('Red') + ' 勝';
+            });
+        }
+
+        blueTeamInput.addEventListener('change', () => saveTeamName('Blue', blueTeamInput.value));
+        redTeamInput.addEventListener('change', () => saveTeamName('Red', redTeamInput.value));
+        blueTeamInput.addEventListener('blur', () => saveTeamName('Blue', blueTeamInput.value));
+        redTeamInput.addEventListener('blur', () => saveTeamName('Red', redTeamInput.value));
+
+        let modalConfirmHandler = null;
+
+        function showModal(title, text) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-text').textContent = text;
+            document.getElementById('modal-actions-alert').classList.remove('hidden');
+            document.getElementById('modal-actions-confirm').classList.add('hidden');
+            modalConfirmHandler = null;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function showConfirmModal(title, text, onConfirm) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-text').textContent = text;
+            document.getElementById('modal-actions-alert').classList.add('hidden');
+            document.getElementById('modal-actions-confirm').classList.remove('hidden');
+            modalConfirmHandler = onConfirm;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function hideModal() {
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modal-actions-alert').classList.remove('hidden');
+            document.getElementById('modal-actions-confirm').classList.add('hidden');
+            modalConfirmHandler = null;
+        }
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            const handler = modalConfirmHandler;
+            hideModal();
+            if (handler) handler();
+        });
+
+        async function loadChampionRoster() {
+            championLoadStatus = 'loading';
+            renderChampions();
+            startButton.disabled = true;
+            startButton.textContent = '載入中…';
+            selectMessage.textContent = '英雄資料載入中…';
+
+            try {
+                const versionsRes = await fetch('https://ddragon.leagueoflegends.com/api/versions.json', { cache: 'no-store' });
+                if (!versionsRes.ok) throw new Error(`版本載入失敗 (${versionsRes.status})`);
+                const versions = await versionsRes.json();
+                if (versions?.length) ddragonVersion = versions[0];
+
+                const champsRes = await fetch(
+                    `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/data/zh_TW/champion.json`,
+                    { cache: 'no-store' }
+                );
+                if (!champsRes.ok) throw new Error(`英雄載入失敗 (${champsRes.status})`);
+
+                const json = await champsRes.json();
+                const entries = Object.values(json.data || {});
+                if (!entries.length) throw new Error('未取得英雄資料');
+
+                champions = entries
+                    .map(({ id, name }) => ({ id, name }))
+                    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+
+                championLoadStatus = 'success';
+                startButton.disabled = false;
+                startButton.textContent = '開始選角';
+                selectMessage.textContent = '';
+                renderChampions();
+                renderDraftBoard();
+            } catch (err) {
+                console.error(err);
+                championLoadStatus = 'error';
+                championLoadErrorMessage = err.message || '未知錯誤';
+                startButton.disabled = true;
+                startButton.textContent = '載入失敗';
+                selectMessage.textContent = '載入失敗，請重試';
+                renderChampions();
+            }
+        }
+
+        function parseSlotId(slotId) {
+            const [teamRaw, type, indexRaw] = slotId.split('-');
+            return {
+                team: teamRaw.charAt(0).toUpperCase() + teamRaw.slice(1),
+                type,
+                index: parseInt(indexRaw, 10),
+            };
+        }
+
+        function getTeamArray(team, type) {
+            return type === 'bans' ? currentBPState.teamData[team].bans : currentBPState.teamData[team].picks;
+        }
+
+        function canEditSlots() {
+            if (currentSeriesScore.Blue === 3 || currentSeriesScore.Red === 3) return false;
+            return currentBPState.currentStep > 0;
+        }
+
+        function isActiveSlot(team, type, index) {
+            const { currentStep } = currentBPState;
+            if (currentStep < 1 || currentStep > DRAFT_FLOW.length) return false;
+            const action = DRAFT_FLOW[currentStep - 1];
+            const expectedType = action.type === 'Ban' ? 'bans' : 'picks';
+            const count = type === 'bans'
+                ? currentBPState.banCounts[team]
+                : currentBPState.pickCounts[team];
+            return action.team === team && expectedType === type && index === count + 1;
+        }
+
+        function canDropOnSlot(team, type, index) {
+            if (!canEditSlots()) return false;
+            const arr = getTeamArray(team, type);
+            if (index <= arr.length) return true;
+            if (currentBPState.currentStep > DRAFT_FLOW.length) return false;
+            return isActiveSlot(team, type, index);
+        }
+
+        function isChampionUsedElsewhere(championId, exceptSlot = null) {
+            for (const side of ['Blue', 'Red']) {
+                for (const kind of ['bans', 'picks']) {
+                    const arr = getTeamArray(side, kind);
+                    for (let i = 0; i < arr.length; i++) {
+                        const slotIndex = i + 1;
+                        if (
+                            arr[i] === championId &&
+                            (!exceptSlot ||
+                                exceptSlot.team !== side ||
+                                exceptSlot.type !== kind ||
+                                exceptSlot.index !== slotIndex)
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function validateChampionForAssignment(championId, exceptSlot = null) {
+            if (seriesPickedChampions.has(championId)) {
+                const name = champions.find(c => c.id === championId)?.name || championId;
+                showModal('系列賽禁用', `${name} 已在先前局數被 Pick，本系列賽不可再選。`);
+                return false;
+            }
+            if (isChampionUsedElsewhere(championId, exceptSlot)) {
+                return false;
+            }
+            return true;
+        }
+
+        function updateResetGameButton() {
+            if (!resetGameButton) return;
+            const seriesEnded = currentSeriesScore.Blue === 3 || currentSeriesScore.Red === 3;
+            resetGameButton.disabled = seriesEnded || currentBPState.currentStep === 0;
+        }
+
+        function setupDragAndDrop() {
+            const arena = document.querySelector('.draft-arena');
+            if (!arena || arena.dataset.dragInit) return;
+            arena.dataset.dragInit = '1';
+
+            arena.addEventListener('dragover', (e) => {
+                const slot = e.target.closest('.slot');
+                if (!slot) return;
+                const { team, type, index } = parseSlotId(slot.id);
+                if (!canDropOnSlot(team, type, index)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                slot.classList.add('slot-drag-over');
+            });
+
+            arena.addEventListener('dragleave', (e) => {
+                const slot = e.target.closest('.slot');
+                if (slot) slot.classList.remove('slot-drag-over');
+            });
+
+            arena.addEventListener('drop', (e) => {
+                const slot = e.target.closest('.slot');
+                if (!slot) return;
+                e.preventDefault();
+                slot.classList.remove('slot-drag-over');
+                const championId = e.dataTransfer.getData('text/plain');
+                const payload = dragPayload || (championId ? { source: 'grid', championId } : null);
+                if (!payload) return;
+                const target = parseSlotId(slot.id);
+                handleSlotDrop(target, payload);
+            });
+
+            arena.addEventListener('dragstart', (e) => {
+                const slot = e.target.closest('.slot.slot-filled');
+                if (!slot) return;
+                if (!slot.dataset.championId || !canEditSlots()) {
+                    e.preventDefault();
+                    return;
+                }
+                const source = parseSlotId(slot.id);
+                dragPayload = {
+                    source: 'slot',
+                    championId: slot.dataset.championId,
+                    ...source,
+                };
+                e.dataTransfer.setData('text/plain', slot.dataset.championId);
+                e.dataTransfer.effectAllowed = 'move';
+                slot.classList.add('dragging');
+            });
+
+            arena.addEventListener('dragend', (e) => {
+                const slot = e.target.closest('.slot');
+                if (slot) slot.classList.remove('dragging');
+                const card = e.target.closest('.draggable-champ');
+                if (card) card.classList.remove('dragging');
+                dragPayload = null;
+            });
+        }
+
+        function handleSlotDrop(target, payload) {
+            const { team, type, index } = target;
+            if (!canDropOnSlot(team, type, index)) return;
+
+            if (payload.source === 'grid') {
+                assignChampionToSlot(team, type, index, payload.championId);
+                return;
+            }
+
+            if (payload.source === 'slot') {
+                if (payload.team === team && payload.type === type && payload.index === index) return;
+                const targetArr = getTeamArray(team, type);
+                if (index <= targetArr.length) {
+                    swapSlotChampions(payload, target);
+                }
+            }
+        }
+
+        function assignChampionToSlot(team, type, index, championId) {
+            const arr = getTeamArray(team, type);
+            const count = arr.length;
+            const isReplace = index <= count;
+            const exceptSlot = isReplace ? { team, type, index } : null;
+
+            if (!validateChampionForAssignment(championId, exceptSlot)) return;
+
+            if (isReplace) {
+                const oldId = arr[index - 1];
+                if (oldId === championId) return;
+                currentBPState.selectedChampions.delete(oldId);
+                arr[index - 1] = championId;
+                currentBPState.selectedChampions.add(championId);
+            } else if (isActiveSlot(team, type, index) && index === count + 1) {
+                handleSelection(championId);
+                return;
+            } else {
+                return;
+            }
+
+            renderDraftBoard();
+            renderChampions();
+            updatePhaseDisplay();
+        }
+
+        function swapSlotChampions(source, target) {
+            const sourceArr = getTeamArray(source.team, source.type);
+            const targetArr = getTeamArray(target.team, target.type);
+            if (source.index > sourceArr.length || target.index > targetArr.length) return;
+
+            const sourceId = sourceArr[source.index - 1];
+            const targetId = targetArr[target.index - 1];
+            if (!sourceId || !targetId || sourceId === targetId) return;
+
+            sourceArr[source.index - 1] = targetId;
+            targetArr[target.index - 1] = sourceId;
+
+            renderDraftBoard();
+            renderChampions();
+            updatePhaseDisplay();
+        }
+
+        function initializeSlots() {
+            const create = (team, type, count) => {
+                const container = document.getElementById(`${team.toLowerCase()}-${type}`);
+                container.innerHTML = '';
+                const isBan = type === 'bans';
+                for (let i = 1; i <= count; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = `slot ${isBan ? 'slot-ban' : 'slot-pick'}`;
+                    slot.id = `${team.toLowerCase()}-${type}-${i}`;
+                    if (!isBan) {
+                        slot.innerHTML = `<span class="slot-num">${i}</span>`;
+                    }
+                    container.appendChild(slot);
+                }
+            };
+            create('Blue', 'bans', 5);
+            create('Red', 'bans', 5);
+            create('Blue', 'picks', 5);
+            create('Red', 'picks', 5);
+            setupDragAndDrop();
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('blue-score').textContent = currentSeriesScore.Blue;
+            document.getElementById('red-score').textContent = currentSeriesScore.Red;
+            document.getElementById('game-number').textContent = currentGameNumber;
+
+            if (currentSeriesScore.Blue === 3) {
+                phaseText.innerHTML = `<span class="text-blue-400">${getTeamName('Blue')} 系列賽獲勝</span>`;
+                showModal('系列賽結束', `${getTeamName('Blue')} 以 3:${currentSeriesScore.Red} 贏得系列賽`);
+                winnerButtons.classList.add('hidden');
+                startButton.disabled = true;
+                startButton.textContent = '已結束';
+            } else if (currentSeriesScore.Red === 3) {
+                phaseText.innerHTML = `<span class="text-red-400">${getTeamName('Red')} 系列賽獲勝</span>`;
+                showModal('系列賽結束', `${getTeamName('Red')} 以 ${currentSeriesScore.Blue}:3 贏得系列賽`);
+                winnerButtons.classList.add('hidden');
+                startButton.disabled = true;
+                startButton.textContent = '已結束';
+            }
+        }
+
+        function resetGame() {
+            currentBPState = {
+                currentStep: 0,
+                selectedChampions: new Set(),
+                banCounts: { Blue: 0, Red: 0 },
+                pickCounts: { Blue: 0, Red: 0 },
+                teamData: { Blue: { bans: [], picks: [] }, Red: { bans: [], picks: [] } },
+            };
+            phaseText.textContent = '選角尚未開始';
+            if (championLoadStatus === 'success') {
+                startButton.textContent = '開始選角';
+                startButton.disabled = false;
+            } else if (championLoadStatus === 'error') {
+                startButton.textContent = '載入失敗';
+                startButton.disabled = true;
+            }
+            winnerButtons.classList.add('hidden');
+            searchInput.value = '';
+            renderDraftBoard();
+            renderChampions();
+            updatePhaseDisplay();
+            updateResetGameButton();
+        }
+
+        function resetCurrentGame() {
+            if (currentBPState.currentStep === 0) {
+                showModal('提示', '本局尚未開始。');
+                return;
+            }
+            if (currentSeriesScore.Blue === 3 || currentSeriesScore.Red === 3) {
+                showModal('提示', '系列賽已結束。');
+                return;
+            }
+            showConfirmModal(
+                '確認重置本局',
+                `確定要重置第 ${currentGameNumber} 局 B/P？系列賽比分不會變動。`,
+                () => {
+                    resetGame();
+                    blueTeamInput.disabled = false;
+                    redTeamInput.disabled = false;
+                }
+            );
+        }
+
+        function resetSeries() {
+            currentSeriesScore = { Blue: 0, Red: 0 };
+            currentGameNumber = 1;
+            seriesHistory = [];
+            seriesPickedChampions = new Set();
+            renderSeriesHistory();
+            resetGame();
+            updateScoreDisplay();
+            showModal('已重置', 'BO5 系列賽已重置，Pick 禁用清單已清除。');
+        }
+
+        function startDraft() {
+            if (currentBPState.currentStep > 0) return;
+            if (championLoadStatus !== 'success') {
+                showModal('請稍候', '英雄資料尚未載入完成。');
+                return;
+            }
+            if (currentSeriesScore.Blue === 3 || currentSeriesScore.Red === 3) {
+                showModal('系列賽已結束', '請先重置系列賽。');
+                return;
+            }
+            currentBPState.currentStep = 1;
+            startButton.textContent = '進行中…';
+            startButton.disabled = true;
+            blueTeamInput.disabled = true;
+            redTeamInput.disabled = true;
+            renderDraftBoard();
+            renderChampions();
+            updatePhaseDisplay();
+            winnerButtons.classList.add('hidden');
+        }
+
+        function declareWinner(winningTeam) {
+            if (currentBPState.currentStep <= DRAFT_FLOW.length) {
+                showModal('尚未完成', '請完成全部 20 步 Ban/Pick 後再宣告勝利。');
+                return;
+            }
+
+            currentBPState.teamData.Blue.picks.forEach(id => seriesPickedChampions.add(id));
+            currentBPState.teamData.Red.picks.forEach(id => seriesPickedChampions.add(id));
+
+            seriesHistory.push({
+                game: currentGameNumber,
+                winner: winningTeam,
+                blueBans: [...currentBPState.teamData.Blue.bans],
+                redBans: [...currentBPState.teamData.Red.bans],
+                bluePicks: [...currentBPState.teamData.Blue.picks],
+                redPicks: [...currentBPState.teamData.Red.picks],
+                note: '',
+            });
+            renderSeriesHistory();
+
+            currentSeriesScore[winningTeam]++;
+            updateScoreDisplay();
+
+            if (currentSeriesScore.Blue !== 3 && currentSeriesScore.Red !== 3) {
+                currentGameNumber++;
+                resetGame();
+                showModal('本局結束', `${getTeamName(winningTeam)} 贏得第 ${currentGameNumber - 1} 局，請開始第 ${currentGameNumber} 局。`);
+            }
+            blueTeamInput.disabled = false;
+            redTeamInput.disabled = false;
+            updateResetGameButton();
+        }
+
+        function updateSeriesNote(gameNumber, note) {
+            const entry = seriesHistory.find(r => r.game === gameNumber);
+            if (entry) entry.note = note;
+        }
+
+        function setupSeriesHistoryNotes() {
+            if (!seriesHistoryLog || seriesHistoryLog.dataset.noteInit) return;
+            seriesHistoryLog.dataset.noteInit = '1';
+            seriesHistoryLog.addEventListener('input', (e) => {
+                if (!e.target.matches('.history-note')) return;
+                updateSeriesNote(parseInt(e.target.dataset.game, 10), e.target.value);
+            });
+        }
+
+        function renderChampRow(ids, isBan = false) {
+            const list = Array.isArray(ids) ? ids : [];
+            if (!list.length) {
+                return '<span class="text-xs text-gray-600">—</span>';
+            }
+            const imgSize = isBan ? 'w-10 h-10' : 'w-12 h-12';
+            const boxWidth = isBan ? 'w-12' : 'w-14';
+            const placeholder = isBan ? '40x40' : '48x48';
+            return list.map(id => {
+                const champ = champions.find(c => c.id === id);
+                const name = champ?.name || id;
+                return `
+                    <div class="flex flex-col items-center ${boxWidth} ${isBan ? 'history-champ-ban' : ''}">
+                        <img src="${getChampionIconUrl(id)}" alt="${name}" class="${imgSize} rounded object-cover border border-gray-700"
+                             onerror="this.src='https://placehold.co/${placeholder}/333/fff?text=?'">
+                        <span class="text-[10px] text-gray-400 mt-1 truncate w-full text-center">${name}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderTeamHistory(side, bans, picks) {
+            const teamColor = side === 'Blue' ? 'text-blue-400' : 'text-red-400';
+            return `
+                <div>
+                    <p class="text-xs font-semibold ${teamColor} mb-2">${getTeamName(side)}</p>
+                    <p class="text-[10px] text-gray-500 mb-1">Ban</p>
+                    <div class="flex flex-wrap gap-2 mb-3">${renderChampRow(bans, true)}</div>
+                    <p class="text-[10px] text-gray-500 mb-1">Pick</p>
+                    <div class="flex flex-wrap gap-2">${renderChampRow(picks, false)}</div>
+                </div>`;
+        }
+
+        function renderSeriesHistory() {
+            if (!seriesHistory.length) {
+                seriesHistoryLog.innerHTML = '<p class="text-sm text-gray-500">尚無紀錄</p>';
+                return;
+            }
+
+            seriesHistoryLog.innerHTML = seriesHistory.map(r => {
+                const winnerCls = r.winner === 'Blue' ? 'winner-blue' : 'winner-red';
+                const winnerColor = r.winner === 'Blue' ? 'text-blue-400' : 'text-red-400';
+                const note = (r.note || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                return `
+                    <div class="history-item ${winnerCls} pl-4 py-3 bg-gray-800/50 rounded-r-lg">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-sm font-semibold">第 ${r.game} 局</span>
+                            <span class="text-sm font-semibold ${winnerColor} mr-[5px]">${getTeamName(r.winner)} 勝</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            ${renderTeamHistory('Blue', r.blueBans || [], r.bluePicks || [])}
+                            ${renderTeamHistory('Red', r.redBans || [], r.redPicks || [])}
+                        </div>
+                        <textarea class="history-note custom-scroll" data-game="${r.game}" rows="2" placeholder="備註…">${note}</textarea>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderDraftBoard() {
+            const { currentStep, banCounts, pickCounts, teamData } = currentBPState;
+
+            document.querySelectorAll('.slot').forEach(slot => {
+                const [teamRaw, typeRaw, indexRaw] = slot.id.split('-');
+                const team = teamRaw.charAt(0).toUpperCase() + teamRaw.slice(1);
+                const type = typeRaw;
+                const index = parseInt(indexRaw, 10);
+                const isBan = type === 'bans';
+                const dataArray = isBan ? teamData[team].bans : teamData[team].picks;
+
+                slot.className = `slot ${isBan ? 'slot-ban' : 'slot-pick'}`;
+                slot.innerHTML = '';
+                delete slot.dataset.championId;
+                slot.draggable = false;
+                slot.classList.remove('slot-filled', 'dragging', 'slot-drag-over');
+
+                if (dataArray[index - 1]) {
+                    const champId = dataArray[index - 1];
+                    const champ = champions.find(c => c.id === champId);
+                    const name = champ?.name || champId;
+                    slot.dataset.championId = champId;
+                    slot.draggable = canEditSlots();
+                    slot.classList.add('slot-filled');
+                    slot.innerHTML = `
+                        <img src="${getChampionIconUrl(champId)}" alt="${name}" class="w-full h-full object-cover pointer-events-none"
+                             onerror="this.src='https://placehold.co/72x72/333/fff?text=?'">
+                        ${isBan ? '<div class="ban-x">×</div>' : ''}`;
+                    slot.classList.add(isBan ? 'slot-ban-done' : `slot-pick-${teamRaw}`);
+                } else if (!isBan) {
+                    slot.innerHTML = `<span class="slot-num">${index}</span>`;
+                }
+            });
+
+            if (currentStep > 0 && currentStep <= DRAFT_FLOW.length) {
+                const action = DRAFT_FLOW[currentStep - 1];
+                const teamRaw = action.team.toLowerCase();
+                const typeRaw = action.type.toLowerCase() + 's';
+                const idx = action.type === 'Ban'
+                    ? banCounts[action.team] + 1
+                    : pickCounts[action.team] + 1;
+                document.getElementById(`${teamRaw}-${typeRaw}-${idx}`)?.classList.add('slot-active');
+            }
+
+            document.getElementById('blue-bans-label').textContent = `Ban ${banCounts.Blue}/5`;
+            document.getElementById('red-bans-label').textContent = `Ban ${banCounts.Red}/5`;
+            document.getElementById('blue-picks-label').textContent = `Pick ${pickCounts.Blue}/5`;
+            document.getElementById('red-picks-label').textContent = `Pick ${pickCounts.Red}/5`;
+            updateResetGameButton();
+        }
+
+        function updatePhaseDisplay() {
+            const { currentStep } = currentBPState;
+            updateScoreDisplay();
+            if (currentSeriesScore.Blue === 3 || currentSeriesScore.Red === 3) return;
+
+            if (currentStep > DRAFT_FLOW.length) {
+                phaseText.textContent = '選角完成，請宣告勝利';
+                startButton.disabled = true;
+                startButton.textContent = '完成';
+                winnerButtons.classList.remove('hidden');
+                document.getElementById('winner-buttons').querySelector('[onclick*="Blue"]').textContent = getTeamName('Blue') + ' 勝';
+                document.getElementById('winner-buttons').querySelector('[onclick*="Red"]').textContent = getTeamName('Red') + ' 勝';
+                updateResetGameButton();
+                return;
+            }
+            if (currentStep === 0) {
+                phaseText.textContent = '選角尚未開始';
+                updateResetGameButton();
+                return;
+            }
+
+            const action = DRAFT_FLOW[currentStep - 1];
+            const teamLabel = getTeamName(action.team);
+            const actionLabel = action.type === 'Ban' ? 'Ban' : 'Pick';
+            const color = action.team === 'Blue' ? 'text-blue-400' : 'text-red-400';
+            phaseText.innerHTML = `<span class="${color}">${teamLabel} ${action.description}</span> · ${actionLabel} · 步驟 ${currentStep}/${DRAFT_FLOW.length}`;
+            updateResetGameButton();
+        }
+
+        function renderChampions() {
+            if (championLoadStatus === 'loading') {
+                championGrid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-8 text-sm">載入中…</p>';
+                return;
+            }
+            if (championLoadStatus === 'error') {
+                championGrid.innerHTML = `
+                    <div class="col-span-full text-center py-8 space-y-3">
+                        <p class="text-red-400 text-sm">載入失敗：${championLoadErrorMessage}</p>
+                        <button class="px-4 py-2 rounded-lg bg-yellow-500 text-gray-900 text-sm font-semibold" onclick="loadChampionRoster()">重試</button>
+                    </div>`;
+                return;
+            }
+            if (!champions.length) {
+                championGrid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-8 text-sm">無英雄資料</p>';
+                return;
+            }
+
+            const search = (searchInput?.value || '').toLocaleLowerCase('zh-Hant');
+            const unavailable = new Set([...currentBPState.selectedChampions, ...seriesPickedChampions]);
+            const { currentStep } = currentBPState;
+
+            const filtered = champions.filter(c => {
+                if (!search) return true;
+                return c.name.toLocaleLowerCase('zh-Hant').includes(search) || c.id.toLowerCase().includes(search);
+            });
+
+            const ordered = [
+                ...filtered.filter(c => !unavailable.has(c.id)),
+                ...filtered.filter(c => unavailable.has(c.id)),
+            ];
+
+            if (!ordered.length) {
+                championGrid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-8 text-sm">沒有符合的英雄</p>';
+                return;
+            }
+
+            championGrid.innerHTML = '';
+            ordered.forEach(champ => {
+                const isSeriesBanned = seriesPickedChampions.has(champ.id);
+                const isGameUsed = currentBPState.selectedChampions.has(champ.id);
+                const isUnavailable = unavailable.has(champ.id);
+                const isOnBoard = isGameUsed;
+                const canClick = championLoadStatus === 'success' && !isOnBoard && !isSeriesBanned
+                    && currentStep > 0 && currentStep <= DRAFT_FLOW.length;
+                const canDrag = championLoadStatus === 'success' && canEditSlots()
+                    && !isSeriesBanned && !isOnBoard;
+
+                const div = document.createElement('div');
+                div.className = 'champ-card relative p-1 text-center' +
+                    (isSeriesBanned ? ' series-banned' : isOnBoard ? ' disabled' : canClick ? ' cursor-pointer' : '') +
+                    (canDrag ? ' draggable-champ' : '');
+                div.title = champ.name;
+                div.innerHTML = `
+                    <img src="${getChampionIconUrl(champ.id)}" alt="${champ.name}" class="w-full rounded object-cover pointer-events-none"
+                         onerror="this.src='https://placehold.co/64x64/333/fff?text=?'">
+                    <span class="block text-[10px] text-gray-400 truncate mt-1">${champ.name}</span>
+                    ${isSeriesBanned ? '<div class="series-tag">已選</div>' : ''}`;
+                if (canClick) div.onclick = () => handleSelection(champ.id);
+                if (canDrag) {
+                    div.draggable = true;
+                    div.addEventListener('dragstart', (e) => {
+                        dragPayload = { source: 'grid', championId: champ.id };
+                        e.dataTransfer.setData('text/plain', champ.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        div.classList.add('dragging');
+                    });
+                    div.addEventListener('dragend', () => {
+                        div.classList.remove('dragging');
+                        dragPayload = null;
+                    });
+                }
+                championGrid.appendChild(div);
+            });
+        }
+
+        function handleSelection(championId) {
+            const { currentStep, selectedChampions } = currentBPState;
+
+            if (championLoadStatus !== 'success') return;
+            if (currentStep === 0 || currentStep > DRAFT_FLOW.length) {
+                showModal('提示', '請先點擊「開始選角」。');
+                return;
+            }
+            if (seriesPickedChampions.has(championId)) {
+                const name = champions.find(c => c.id === championId)?.name || championId;
+                showModal('系列賽禁用', `${name} 已在先前局數被 Pick，本系列賽不可再選。`);
+                return;
+            }
+            if (selectedChampions.has(championId)) return;
+
+            const action = DRAFT_FLOW[currentStep - 1];
+            selectedChampions.add(championId);
+            if (action.type === 'Ban') {
+                currentBPState.teamData[action.team].bans.push(championId);
+                currentBPState.banCounts[action.team]++;
+            } else {
+                currentBPState.teamData[action.team].picks.push(championId);
+                currentBPState.pickCounts[action.team]++;
+            }
+            currentBPState.currentStep++;
+            renderDraftBoard();
+            renderChampions();
+            updatePhaseDisplay();
+        }
+
+        window.onload = async () => {
+            loadTeamNames();
+            initializeSlots();
+            setupSeriesHistoryNotes();
+            updatePhaseDisplay();
+            updateScoreDisplay();
+            renderSeriesHistory();
+            await loadChampionRoster();
+        };
+    </script>
+</body>
+</html>

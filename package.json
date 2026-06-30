@@ -1,0 +1,23 @@
+{
+  "name": "lolgbps",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "npm run dev --prefix my-bp-simulator",
+    "build": "npm install --prefix my-bp-simulator && npm run build --prefix my-bp-simulator",
+    "start": "node server/index.js",
+    "postinstall": "npm install --prefix my-bp-simulator"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
