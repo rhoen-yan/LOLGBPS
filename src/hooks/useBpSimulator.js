@@ -37,6 +37,23 @@ function parseSlotFromId(slotId) {
   };
 }
 
+function syncOurTeamName(teamNames, ourSide, myTeamName) {
+  const trimmed = myTeamName.trim();
+  if (!trimmed || !ourSide) return teamNames;
+
+  const blueDefault = '藍方';
+  const redDefault = '紅方';
+  const other = ourSide === 'Blue' ? 'Red' : 'Blue';
+  const updated = { ...teamNames };
+
+  updated[ourSide] = trimmed;
+  if (updated[other] === trimmed) {
+    updated[other] = other === 'Blue' ? blueDefault : redDefault;
+  }
+
+  return updated;
+}
+
 export function useBpSimulator() {
   const [ddragonVersion, setDdragonVersion] = useState(DEFAULT_DDRAGON_VERSION);
   const [champions, setChampions] = useState([]);
@@ -154,10 +171,28 @@ export function useBpSimulator() {
     setMyTeamName(value);
   }, []);
 
-  const saveMyTeamName = useCallback((value) => {
-    if (!canEdit) return;
-    setMyTeamName(value.trim());
-  }, [canEdit]);
+  const saveMyTeamName = useCallback(
+    (value) => {
+      if (!canEdit) return;
+      const trimmed = value.trim();
+      setMyTeamName(trimmed);
+      if (ourSide && trimmed) {
+        setTeamNames((names) => syncOurTeamName(names, ourSide, trimmed));
+      }
+    },
+    [canEdit, ourSide],
+  );
+
+  useEffect(() => {
+    if (!recordHydrated || !canEdit) return;
+    const trimmed = myTeamName.trim();
+    if (!ourSide || !trimmed) return;
+    setTeamNames((names) => {
+      const synced = syncOurTeamName(names, ourSide, trimmed);
+      if (synced.Blue === names.Blue && synced.Red === names.Red) return names;
+      return synced;
+    });
+  }, [recordHydrated, canEdit, ourSide, myTeamName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -531,25 +566,14 @@ export function useBpSimulator() {
 
         if (trimmed) {
           setTeamNames((names) => {
-            const blueDefault = '藍方';
-            const redDefault = '紅方';
-            const updated = { ...names };
-
-            const revertSide = (s) => {
-              const def = s === 'Blue' ? blueDefault : redDefault;
-              if (updated[s] === trimmed) updated[s] = def;
-            };
-
-            const applySide = (s) => {
-              const def = s === 'Blue' ? blueDefault : redDefault;
-              if (updated[s] === def) updated[s] = trimmed;
-            };
-
-            if (prev && prev !== next) revertSide(prev);
-            if (next === null && prev === side) revertSide(side);
-            if (next === side) applySide(side);
-
-            return updated;
+            if (next) return syncOurTeamName(names, next, trimmed);
+            if (prev) {
+              const updated = { ...names };
+              const def = prev === 'Blue' ? '藍方' : '紅方';
+              if (updated[prev] === trimmed) updated[prev] = def;
+              return updated;
+            }
+            return names;
           });
         }
 
