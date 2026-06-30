@@ -293,8 +293,13 @@ export function useBpSimulator() {
       if (!canEdit) return false;
       if (!canEditSlots()) return false;
       const arr = getTeamArray(bpState.teamData, team, type);
+
+      if (bpState.currentStep > DRAFT_FLOW.length) {
+        if (type !== 'picks') return false;
+        return index <= arr.length;
+      }
+
       if (index <= arr.length) return true;
-      if (bpState.currentStep > DRAFT_FLOW.length) return false;
       return isActiveSlot(team, type, index);
     },
     [canEdit, canEditSlots, bpState, isActiveSlot],

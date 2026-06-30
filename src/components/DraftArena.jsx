@@ -177,12 +177,15 @@ function ChampionGrid() {
     draggingChampId,
     getChampionIconUrl,
     loadChampionRoster,
+    canEdit,
+    showWinnerButtons,
   } = useBp();
 
-  const canSelect =
-    championLoadStatus === 'success' &&
-    bpState.currentStep > 0 &&
-    bpState.currentStep <= DRAFT_FLOW.length;
+  const draftActive =
+    bpState.currentStep > 0 && bpState.currentStep <= DRAFT_FLOW.length;
+  const canClickSelect = championLoadStatus === 'success' && draftActive && canEdit;
+  const canDragFromGrid =
+    championLoadStatus === 'success' && canEdit && (draftActive || showWinnerButtons);
 
   const statusText =
     championLoadStatus === 'loading'
@@ -225,7 +228,8 @@ function ChampionGrid() {
           filteredChampions.map((c) => {
             const isUnavailable = unavailableIds.has(c.id);
             const isSeriesBanned = seriesPickedChampions.includes(c.id);
-            const disabled = isUnavailable || !canSelect;
+            const disabledClick = isUnavailable || !canClickSelect;
+            const disabledDrag = isUnavailable || !canDragFromGrid;
             const isDragging = draggingChampId === c.id;
 
             return (
@@ -234,16 +238,16 @@ function ChampionGrid() {
                 type="button"
                 className={[
                   'champ-card relative overflow-hidden p-1',
-                  disabled ? 'disabled' : 'draggable-champ',
+                  disabledClick && disabledDrag ? 'disabled' : 'draggable-champ',
                   isSeriesBanned ? 'series-banned' : '',
                   isDragging ? 'dragging' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                draggable={!disabled}
-                onDragStart={(e) => !disabled && onChampDragStart(e, c.id)}
+                draggable={!disabledDrag}
+                onDragStart={(e) => !disabledDrag && onChampDragStart(e, c.id)}
                 onDragEnd={onDragEnd}
-                onClick={() => !disabled && handleSelection(c.id)}
+                onClick={() => !disabledClick && handleSelection(c.id)}
               >
                 <img
                   src={getChampionIconUrl(c.id)}
