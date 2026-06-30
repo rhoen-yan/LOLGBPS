@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getRecord, getPool, initDb, saveRecord } from './db.js';
+import { ensureDb, getPool, getRecord, initDb, saveRecord } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '../my-bp-simulator/dist');
@@ -14,6 +14,7 @@ app.get('/api/health', async (_req, res) => {
   let dbOk = false;
   if (process.env.DATABASE_URL) {
     try {
+      await ensureDb();
       const db = getPool();
       if (db) {
         await db.query('SELECT 1');
@@ -60,10 +61,15 @@ app.get(/^(?!\/api).*/, (_req, res) => {
 });
 
 async function start() {
-  await initDb();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`LOLGBPS listening on ${PORT}`);
   });
+
+  if (process.env.DATABASE_URL) {
+    initDb().catch((err) => {
+      console.error('[db] background init failed, will retry on API calls', err.message);
+    });
+  }
 }
 
 start().catch((err) => {

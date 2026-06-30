@@ -1,4 +1,7 @@
 import pg from 'pg';
+import dns from 'node:dns';
+
+dns.setDefaultResultOrder('ipv4first');
 
 const { Pool } = pg;
 
@@ -40,6 +43,7 @@ export async function initDb(maxAttempts = 12, delayMs = 3000) {
         )
       `);
       console.log('[db] ready');
+      dbReady = true;
       return;
     } catch (err) {
       lastError = err;
@@ -50,7 +54,17 @@ export async function initDb(maxAttempts = 12, delayMs = 3000) {
   throw lastError;
 }
 
+let dbReady = false;
+
+export async function ensureDb() {
+  if (dbReady || !process.env.DATABASE_URL) return dbReady;
+  await initDb();
+  dbReady = true;
+  return true;
+}
+
 export async function getRecord() {
+  await ensureDb();
   const db = getPool();
   if (!db) return memoryRecord;
   const result = await db.query('SELECT data FROM app_record WHERE id = $1', ['default']);
@@ -59,6 +73,7 @@ export async function getRecord() {
 }
 
 export async function saveRecord(data) {
+  await ensureDb();
   const db = getPool();
   if (!db) {
     memoryRecord = data;
