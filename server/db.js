@@ -5,30 +5,49 @@ const { Pool } = pg;
 let pool = null;
 let memoryRecord = null;
 
-function getPool() {
+export function getPool() {
   if (!process.env.DATABASE_URL) return null;
   if (!pool) {
+    const internal = process.env.DATABASE_URL.includes('railway.internal');
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false },
+      ssl: internal ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 15000,
     });
   }
   return pool;
 }
 
-export async function initDb() {
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function initDb(maxAttempts = 12, delayMs = 3000) {
   const db = getPool();
   if (!db) {
     console.warn('[db] DATABASE_URL not set — using in-memory storage');
     return;
   }
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS app_record (
-      id TEXT PRIMARY KEY,
-      data JSONB NOT NULL DEFAULT '{}'::jsonb,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS app_record (
+          id TEXT PRIMARY KEY,
+          data JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      console.log('[db] ready');
+      return;
+    } catch (err) {
+      lastError = err;
+      console.error(`[db] init attempt ${attempt}/${maxAttempts} failed:`, err.message);
+      if (attempt < maxAttempts) await sleep(delayMs);
+    }
+  }
+  throw lastError;
 }
 
 export async function getRecord() {

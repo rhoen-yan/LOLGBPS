@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getRecord, initDb, saveRecord } from './db.js';
+import { getRecord, getPool, initDb, saveRecord } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '../my-bp-simulator/dist');
@@ -11,7 +11,22 @@ const app = express();
 app.use(express.json({ limit: '4mb' }));
 
 app.get('/api/health', async (_req, res) => {
-  res.json({ ok: true, storage: process.env.DATABASE_URL ? 'postgres' : 'memory' });
+  let dbOk = false;
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = getPool();
+      if (db) {
+        await db.query('SELECT 1');
+        dbOk = true;
+      }
+    } catch {
+      dbOk = false;
+    }
+  }
+  res.json({
+    ok: true,
+    storage: process.env.DATABASE_URL ? (dbOk ? 'postgres' : 'postgres-unavailable') : 'memory',
+  });
 });
 
 app.get('/api/record', async (_req, res) => {
