@@ -61,7 +61,14 @@ export function useBpSimulator() {
   const [draggingSlotId, setDraggingSlotId] = useState(null);
   const [draggingChampId, setDraggingChampId] = useState(null);
 
-  const [modal, setModal] = useState({ open: false, title: '', text: '', mode: 'alert', onConfirm: null });
+  const [modal, setModal] = useState({
+    open: false,
+    title: '',
+    text: '',
+    mode: 'alert',
+    onConfirm: null,
+    confirmLabel: '確認重置',
+  });
   const [teamsBarFlash, setTeamsBarFlash] = useState(false);
 
   const dragPayloadRef = useRef(null);
@@ -110,25 +117,25 @@ export function useBpSimulator() {
 
   const showModal = useCallback((title, text, onDismiss) => {
     modalDismissRef.current = onDismiss ?? null;
-    setModal({ open: true, title, text, mode: 'alert', onConfirm: null });
+    setModal({ open: true, title, text, mode: 'alert', onConfirm: null, confirmLabel: '確認重置' });
   }, []);
 
-  const showConfirmModal = useCallback((title, text, onConfirm) => {
+  const showConfirmModal = useCallback((title, text, onConfirm, confirmLabel = '確認重置') => {
     modalDismissRef.current = null;
-    setModal({ open: true, title, text, mode: 'confirm', onConfirm });
+    setModal({ open: true, title, text, mode: 'confirm', onConfirm, confirmLabel });
   }, []);
 
   const hideModal = useCallback(() => {
     const onDismiss = modalDismissRef.current;
     modalDismissRef.current = null;
-    setModal({ open: false, title: '', text: '', mode: 'alert', onConfirm: null });
+    setModal({ open: false, title: '', text: '', mode: 'alert', onConfirm: null, confirmLabel: '確認重置' });
     onDismiss?.();
   }, []);
 
   const confirmModal = useCallback(() => {
     const handler = modal.onConfirm;
     modalDismissRef.current = null;
-    setModal({ open: false, title: '', text: '', mode: 'alert', onConfirm: null });
+    setModal({ open: false, title: '', text: '', mode: 'alert', onConfirm: null, confirmLabel: '確認重置' });
     if (handler) handler();
   }, [modal.onConfirm]);
 
@@ -490,6 +497,7 @@ export function useBpSimulator() {
             setArchivedSeries((prev) => prev.filter((s) => s.id !== series.id));
           }
         },
+        '移除',
       );
     },
     [canEdit, showConfirmModal, clearCurrentSeries],

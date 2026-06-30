@@ -32,7 +32,7 @@ export default function Modal() {
               className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm"
               onClick={confirmModal}
             >
-              確認重置
+              {modal.confirmLabel}
             </button>
           </div>
         )}
