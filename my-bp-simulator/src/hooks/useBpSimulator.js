@@ -15,6 +15,7 @@ import {
   buildArchivedSeriesSnapshot,
   buildSeriesRecordPayload,
   formatDateYmd,
+  getSeriesTeamName,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -385,6 +386,36 @@ export function useBpSimulator() {
     }
   }, [seriesStartDate, seriesLength, teamNames, currentSeriesScore, seriesHistory]);
 
+  const clearCurrentSeries = useCallback(() => {
+    setSeriesStartDate(null);
+    setOurSide(null);
+    setCurrentSeriesScore({ Blue: 0, Red: 0 });
+    setCurrentGameNumber(1);
+    setSeriesHistory([]);
+    setSeriesPickedChampions([]);
+    resetGame();
+    setTeamInputsLocked(false);
+  }, [resetGame]);
+
+  const requestRemoveSeries = useCallback(
+    (series) => {
+      const blueName = getSeriesTeamName(series, 'Blue');
+      const redName = getSeriesTeamName(series, 'Red');
+      showConfirmModal(
+        '確認移除系列賽',
+        `確定要移除 ${formatSeriesLabel(series.seriesLength)} ${blueName} vs ${redName}？此操作無法復原。`,
+        () => {
+          if (series.id === 'current') {
+            clearCurrentSeries();
+          } else {
+            setArchivedSeries((prev) => prev.filter((s) => s.id !== series.id));
+          }
+        },
+      );
+    },
+    [showConfirmModal, clearCurrentSeries],
+  );
+
   const resetSeries = useCallback(() => {
     archiveCurrentSeries();
     setSeriesStartDate(null);
@@ -719,6 +750,7 @@ export function useBpSimulator() {
     addSeriesEvent,
     updateSeriesEvent,
     removeSeriesEvent,
+    requestRemoveSeries,
     onSlotDragStart,
     onChampDragStart,
     onDragEnd,

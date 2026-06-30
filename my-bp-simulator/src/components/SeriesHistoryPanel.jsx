@@ -282,6 +282,27 @@ function GameRecord({
   );
 }
 
+function SeriesRemoveButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      className="series-remove-btn"
+      title="移除系列賽"
+      aria-label="移除系列賽"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14Z" />
+        <path d="M10 11v6M14 11v6" />
+      </svg>
+    </button>
+  );
+}
+
 function SeriesGroup({
   series,
   champions,
@@ -291,8 +312,10 @@ function SeriesGroup({
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
+  requestRemoveSeries,
   filters,
 }) {
+  const [isOpen, setIsOpen] = useState(true);
   const blueName = getSeriesTeamName(series, 'Blue');
   const redName = getSeriesTeamName(series, 'Red');
   const seriesResult = getOurSeriesResult(series);
@@ -305,31 +328,42 @@ function SeriesGroup({
   if (!filteredGames.length) return null;
 
   return (
-    <details className="history-series-group rounded-lg border border-gray-700/80 bg-gray-900/40" open>
-      <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-lg">
-        <span className="mr-2">{formatSeriesLabel(series.seriesLength)}</span>
-        <span className="text-blue-400">{blueName}</span>
-        <span className="text-gray-500 mx-1.5">vs</span>
-        <span className="text-red-400">{redName}</span>
-        <span className="text-gray-400 mx-2">·</span>
-        <span className="tabular-nums text-gray-300">
-          {series.finalScore.Blue}:{series.finalScore.Red}
-        </span>
-        {seriesResult && (
-          <span
-            className={`ml-1 text-xs font-medium px-1.5 py-0.5 rounded ${
-              seriesResult === 'win'
-                ? 'bg-emerald-900/60 text-emerald-400'
-                : seriesResult === 'loss'
-                  ? 'bg-rose-900/60 text-rose-400'
-                  : 'bg-gray-700 text-gray-400'
-            }`}
-          >
-            {seriesResult === 'win' ? '系列勝' : seriesResult === 'loss' ? '系列敗' : '平'}
+    <details
+      className="history-series-group rounded-lg border border-gray-700/80 bg-gray-900/40"
+      open={isOpen}
+      onToggle={(e) => setIsOpen(e.currentTarget.open)}
+    >
+      <summary className="history-series-summary cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-lg">
+        <span className="history-series-summary-content">
+          <span className="mr-2">{formatSeriesLabel(series.seriesLength)}</span>
+          <span className="text-blue-400">{blueName}</span>
+          <span className="text-gray-500 mx-1.5">vs</span>
+          <span className="text-red-400">{redName}</span>
+          <span className="text-gray-400 mx-2">·</span>
+          <span className="tabular-nums text-gray-300">
+            {series.finalScore.Blue}:{series.finalScore.Red}
           </span>
-        )}
-        {series.isCurrent && <span className="ml-2 text-xs text-amber-400">進行中</span>}
-        {seriesLanesIncomplete && <span className="ml-2"><IncompleteLanesBadge /></span>}
+          {seriesResult && (
+            <span
+              className={`ml-1 text-xs font-medium px-1.5 py-0.5 rounded ${
+                seriesResult === 'win'
+                  ? 'bg-emerald-900/60 text-emerald-400'
+                  : seriesResult === 'loss'
+                    ? 'bg-rose-900/60 text-rose-400'
+                    : 'bg-gray-700 text-gray-400'
+              }`}
+            >
+              {seriesResult === 'win' ? '系列勝' : seriesResult === 'loss' ? '系列敗' : '平'}
+            </span>
+          )}
+          {series.isCurrent && <span className="ml-2 text-xs text-amber-400">進行中</span>}
+          {seriesLanesIncomplete && (
+            <span className="ml-2">
+              <IncompleteLanesBadge />
+            </span>
+          )}
+        </span>
+        {!isOpen && <SeriesRemoveButton onClick={() => requestRemoveSeries(series)} />}
       </summary>
       <div className="px-2 pb-3 pt-1 space-y-3">
         {filteredGames.map((r) => (
@@ -366,6 +400,7 @@ export default function SeriesHistoryPanel() {
     addSeriesEvent,
     updateSeriesEvent,
     removeSeriesEvent,
+    requestRemoveSeries,
   } = useBp();
 
   const [dateFilter, setDateFilter] = useState('');
@@ -520,6 +555,7 @@ export default function SeriesHistoryPanel() {
                     addSeriesEvent={addSeriesEvent}
                     updateSeriesEvent={updateSeriesEvent}
                     removeSeriesEvent={removeSeriesEvent}
+                    requestRemoveSeries={requestRemoveSeries}
                     filters={filters}
                   />
                 ))}
