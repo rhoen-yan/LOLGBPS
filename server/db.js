@@ -16,7 +16,7 @@ export function getPool() {
     const publicProxy = connectionString.includes('proxy.rlwy.net');
     pool = new Pool({
       connectionString,
-      ssl: publicProxy || !internal ? { rejectUnauthorized: false } : false,
+      ssl: internal ? false : publicProxy ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 15000,
     });
   }
