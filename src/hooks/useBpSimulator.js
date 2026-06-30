@@ -23,6 +23,7 @@ import {
 import {
   buildArchivedSeriesSnapshot,
   buildSeriesRecordPayload,
+  computeScoreFromGames,
   formatDateYmd,
   getSeriesTeamName,
 } from '../utils/seriesStorage';
@@ -715,6 +716,46 @@ export function useBpSimulator() {
     [patchSeriesGame],
   );
 
+  const updateGameWinner = useCallback(
+    (seriesId, gameNumber, winner) => {
+      if (!canEdit) return;
+      const normalized = winner === 'Red' ? 'Red' : 'Blue';
+
+      if (seriesId === 'current') {
+        setSeriesHistory((prev) => {
+          const target = prev.find((g) => g.game === gameNumber);
+          if (!target || target.winner === normalized) return prev;
+
+          const next = prev.map((g) =>
+            g.game === gameNumber ? { ...g, winner: normalized } : g,
+          );
+          const nextScore = computeScoreFromGames(next);
+          const needed = getWinsToWin(seriesLength);
+          const ended = nextScore.Blue >= needed || nextScore.Red >= needed;
+
+          setCurrentSeriesScore(nextScore);
+          setCurrentGameNumber(ended ? next.length : next.length + 1);
+
+          return next;
+        });
+        return;
+      }
+
+      setArchivedSeries((prev) =>
+        prev.map((series) => {
+          if (series.id !== seriesId) return series;
+          const target = series.games.find((g) => g.game === gameNumber);
+          if (!target || target.winner === normalized) return series;
+          const games = series.games.map((g) =>
+            g.game === gameNumber ? { ...g, winner: normalized } : g,
+          );
+          return { ...series, games, finalScore: computeScoreFromGames(games) };
+        }),
+      );
+    },
+    [canEdit, seriesLength],
+  );
+
   const onSlotDragStart = useCallback(
     (e, slotId, championId) => {
       if (!canEditSlots()) {
@@ -885,6 +926,7 @@ export function useBpSimulator() {
     addSeriesEvent,
     updateSeriesEvent,
     removeSeriesEvent,
+    updateGameWinner,
     requestRemoveSeries,
     onSlotDragStart,
     onChampDragStart,

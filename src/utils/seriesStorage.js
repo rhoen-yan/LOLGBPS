@@ -239,6 +239,15 @@ export function getOurGameResult(game, ourSide) {
   return 'loss';
 }
 
+export function computeScoreFromGames(games) {
+  const score = { Blue: 0, Red: 0 };
+  for (const game of games ?? []) {
+    if (game.winner === 'Blue') score.Blue += 1;
+    else if (game.winner === 'Red') score.Red += 1;
+  }
+  return score;
+}
+
 export function getClinchingGame(series) {
   const needed = getWinsToWin(series.seriesLength ?? 5);
   let blue = 0;

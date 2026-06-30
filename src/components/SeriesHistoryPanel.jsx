@@ -174,6 +174,7 @@ function GameRecord({
   getChampionIconUrl,
   updateSeriesNote,
   updateGamePickLane,
+  updateGameWinner,
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
@@ -185,6 +186,8 @@ function GameRecord({
   const blueName = getSeriesTeamName(series, 'Blue');
   const redName = getSeriesTeamName(series, 'Red');
   const winnerName = record.winner === 'Blue' ? blueName : redName;
+  const otherWinner = record.winner === 'Blue' ? 'Red' : 'Blue';
+  const otherWinnerName = otherWinner === 'Blue' ? blueName : redName;
   const ourResult = getOurGameResult(record, record.ourSide);
   const gameChampions = getGameChampionsFromIds(collectGameChampionIds(record), champions);
   const lanesIncomplete = !isGameLaneComplete(record);
@@ -222,6 +225,19 @@ function GameRecord({
             </span>
           )}
           <span className={`text-sm font-semibold ${winnerColor} mr-[5px]`}>{winnerName} 勝</span>
+          {canEdit && (
+            <button
+              type="button"
+              className="p-1 rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700/60 transition"
+              title={`改為${otherWinnerName}勝`}
+              aria-label={`改為${otherWinnerName}勝`}
+              onClick={() => updateGameWinner(series.id, record.game, otherWinner)}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -313,6 +329,7 @@ function SeriesGroup({
   getChampionIconUrl,
   updateSeriesNote,
   updateGamePickLane,
+  updateGameWinner,
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
@@ -380,6 +397,7 @@ function SeriesGroup({
             getChampionIconUrl={getChampionIconUrl}
             updateSeriesNote={updateSeriesNote}
             updateGamePickLane={updateGamePickLane}
+            updateGameWinner={updateGameWinner}
             addSeriesEvent={addSeriesEvent}
             updateSeriesEvent={updateSeriesEvent}
             removeSeriesEvent={removeSeriesEvent}
@@ -403,6 +421,7 @@ export default function SeriesHistoryPanel() {
     getChampionIconUrl,
     updateSeriesNote,
     updateGamePickLane,
+    updateGameWinner,
     addSeriesEvent,
     updateSeriesEvent,
     removeSeriesEvent,
@@ -559,6 +578,7 @@ export default function SeriesHistoryPanel() {
                     getChampionIconUrl={getChampionIconUrl}
                     updateSeriesNote={updateSeriesNote}
                     updateGamePickLane={updateGamePickLane}
+                    updateGameWinner={updateGameWinner}
                     addSeriesEvent={addSeriesEvent}
                     updateSeriesEvent={updateSeriesEvent}
                     removeSeriesEvent={removeSeriesEvent}
