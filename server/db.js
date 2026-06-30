@@ -11,10 +11,12 @@ let memoryRecord = null;
 export function getPool() {
   if (!process.env.DATABASE_URL) return null;
   if (!pool) {
-    const internal = process.env.DATABASE_URL.includes('railway.internal');
+    const connectionString = process.env.DATABASE_URL;
+    const internal = connectionString.includes('railway.internal');
+    const publicProxy = connectionString.includes('proxy.rlwy.net');
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: internal ? false : { rejectUnauthorized: false },
+      connectionString,
+      ssl: publicProxy || !internal ? { rejectUnauthorized: false } : false,
       connectionTimeoutMillis: 15000,
     });
   }
