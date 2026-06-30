@@ -444,6 +444,7 @@ body {
   background: color-mix(in srgb, var(--accent) 12%, #252932);
 }
 .history-item { border-left: 3px solid var(--border); }
+.history-item.winner-pending { border-left-color: var(--accent); }
 .history-item.winner-blue { border-left-color: var(--blue); }
 .history-item.winner-red { border-left-color: var(--red); }
 .password-gate {

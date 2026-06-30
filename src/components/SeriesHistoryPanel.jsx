@@ -241,11 +241,12 @@ function GameRecord({
   canEdit,
 }) {
   const [laneSelection, setLaneSelection] = useState(null);
-  const winnerCls = record.winner === 'Blue' ? 'winner-blue' : 'winner-red';
+  const isPending = !record.winner;
+  const winnerCls = isPending ? 'winner-pending' : record.winner === 'Blue' ? 'winner-blue' : 'winner-red';
   const winnerColor = record.winner === 'Blue' ? 'text-blue-400' : 'text-red-400';
   const blueName = getGameTeamName(record, series, 'Blue');
   const redName = getGameTeamName(record, series, 'Red');
-  const winnerName = record.winner === 'Blue' ? blueName : redName;
+  const winnerName = record.winner === 'Blue' ? blueName : record.winner === 'Red' ? redName : null;
   const otherWinner = record.winner === 'Blue' ? 'Red' : 'Blue';
   const otherWinnerName = otherWinner === 'Blue' ? blueName : redName;
   const ourResult = getOurGameResult(record, record.ourSide);
@@ -274,6 +275,7 @@ function GameRecord({
       <div className="flex justify-between items-center mb-3 gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold">第 {record.game} 局</span>
+          {isPending && <span className="text-xs text-amber-400">進行中</span>}
           {lanesIncomplete && <IncompleteLanesBadge />}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -311,19 +313,23 @@ function GameRecord({
               {ourResult === 'win' ? '勝' : '敗'}
             </span>
           )}
-          <span className={`text-sm font-semibold ${winnerColor} mr-[5px]`}>{winnerName} 勝</span>
-          {canEdit && (
-            <button
-              type="button"
-              className="p-1 rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700/60 transition"
-              title={`改為${otherWinnerName}勝`}
-              aria-label={`改為${otherWinnerName}勝`}
-              onClick={() => updateGameWinner(series.id, record.game, otherWinner)}
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4" />
-              </svg>
-            </button>
+          {!isPending && winnerName && (
+            <>
+              <span className={`text-sm font-semibold ${winnerColor} mr-[5px]`}>{winnerName} 勝</span>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="p-1 rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700/60 transition"
+                  title={`改為${otherWinnerName}勝`}
+                  aria-label={`改為${otherWinnerName}勝`}
+                  onClick={() => updateGameWinner(series.id, record.game, otherWinner)}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4" />
+                  </svg>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

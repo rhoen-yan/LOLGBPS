@@ -265,18 +265,25 @@ export function useBpSimulator() {
     teamInputsLocked,
   ]);
 
+  const bpStateRef = useRef(bpState);
+  bpStateRef.current = bpState;
+
   useEffect(() => {
     if (!recordHydrated) return;
     const poll = async () => {
       if (isSavePending()) return;
       try {
         const { record, updatedAt } = await fetchRemoteRecordMeta();
+        if (isSavePending()) return;
         if (!record || !updatedAt) return;
         if (updatedAt === lastAppliedRemoteAtRef.current) return;
         if (canEdit && updatedAt === getLastSavedUpdatedAt()) {
           lastAppliedRemoteAtRef.current = updatedAt;
           return;
         }
+        const localStep = bpStateRef.current.currentStep;
+        const remoteStep = record.current?.bpState?.currentStep ?? 0;
+        if (canEdit && localStep > 0 && localStep > remoteStep) return;
         applyRecordSnapshot(record);
         lastAppliedRemoteAtRef.current = updatedAt;
       } catch {
@@ -505,6 +512,41 @@ export function useBpSimulator() {
     setTeamInputsLocked(false);
   }, []);
 
+  const syncPendingGameRecord = useCallback(() => {
+    if (!canEdit) return;
+    if (bpState.currentStep <= DRAFT_FLOW.length) return;
+
+    setSeriesHistory((prev) => {
+      const existing = prev.find((g) => g.game === currentGameNumber);
+      if (existing?.winner) return prev;
+
+      const snapshot = {
+        game: currentGameNumber,
+        winner: null,
+        ourSide,
+        blueTeamName: getTeamName('Blue'),
+        redTeamName: getTeamName('Red'),
+        blueBans: [...bpState.teamData.Blue.bans],
+        redBans: [...bpState.teamData.Red.bans],
+        bluePicks: [...bpState.teamData.Blue.picks],
+        redPicks: [...bpState.teamData.Red.picks],
+        bluePickLanes: existing?.bluePickLanes ?? emptyPickLanes(),
+        redPickLanes: existing?.redPickLanes ?? emptyPickLanes(),
+        note: existing?.note ?? '',
+        events: existing?.events ?? [],
+      };
+
+      if (existing) {
+        return prev.map((g) => (g.game === currentGameNumber ? snapshot : g));
+      }
+      return [...prev, snapshot];
+    });
+  }, [canEdit, bpState, currentGameNumber, ourSide, getTeamName]);
+
+  useEffect(() => {
+    syncPendingGameRecord();
+  }, [syncPendingGameRecord]);
+
   const resetCurrentGame = useCallback(() => {
     if (!canEdit) return;
     if (bpState.currentStep === 0) {
@@ -518,7 +560,12 @@ export function useBpSimulator() {
     showConfirmModal(
       '確認重置本局',
       `確定要重置第 ${currentGameNumber} 局 B/P？系列賽比分不會變動。`,
-      () => resetGame(),
+      () => {
+        setSeriesHistory((prev) =>
+          prev.filter((g) => !(g.game === currentGameNumber && !g.winner)),
+        );
+        resetGame();
+      },
     );
   }, [canEdit, bpState.currentStep, seriesEnded, showModal, showConfirmModal, currentGameNumber, resetGame]);
 
@@ -647,31 +694,33 @@ export function useBpSimulator() {
       ]);
 
       setSeriesHistory((prev) => {
-        const next = [
-          ...prev,
-          {
-            game: currentGameNumber,
-            winner: winningTeam,
-            ourSide,
-            blueTeamName: getTeamName('Blue'),
-            redTeamName: getTeamName('Red'),
-            blueBans: [...bpState.teamData.Blue.bans],
-            redBans: [...bpState.teamData.Red.bans],
-            bluePicks: [...bpState.teamData.Blue.picks],
-            redPicks: [...bpState.teamData.Red.picks],
-            bluePickLanes: emptyPickLanes(),
-            redPickLanes: emptyPickLanes(),
-            note: '',
-            events: [],
-          },
-        ];
+        const existing = prev.find((g) => g.game === currentGameNumber);
+        const finalized = {
+          game: currentGameNumber,
+          winner: winningTeam,
+          ourSide,
+          blueTeamName: getTeamName('Blue'),
+          redTeamName: getTeamName('Red'),
+          blueBans: [...bpState.teamData.Blue.bans],
+          redBans: [...bpState.teamData.Red.bans],
+          bluePicks: [...bpState.teamData.Blue.picks],
+          redPicks: [...bpState.teamData.Red.picks],
+          bluePickLanes: existing?.bluePickLanes ?? emptyPickLanes(),
+          redPickLanes: existing?.redPickLanes ?? emptyPickLanes(),
+          note: existing?.note ?? '',
+          events: existing?.events ?? [],
+        };
+
+        const next = existing
+          ? prev.map((g) => (g.game === currentGameNumber ? finalized : g))
+          : [...prev, finalized];
 
         const { teamA, teamB, scoreA, scoreB } = computeTeamSeriesScore({
           teamNames,
           games: next,
         });
         const needed = getWinsToWin(seriesLength);
-        const winnerName = getWinningTeamName(next[next.length - 1], { teamNames, games: next });
+        const winnerName = getWinningTeamName(finalized, { teamNames, games: next });
 
         if (scoreA < needed && scoreB < needed) {
           setCurrentGameNumber((g) => g + 1);
@@ -894,7 +943,7 @@ export function useBpSimulator() {
       return { text: `${winner} 系列賽獲勝` };
     }
     if (bpState.currentStep > DRAFT_FLOW.length) {
-      return { text: '選角完成，請宣告勝利' };
+      return { text: '等待結果' };
     }
     if (bpState.currentStep === 0) {
       return { text: '選角尚未開始' };

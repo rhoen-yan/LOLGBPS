@@ -7,6 +7,7 @@ export const ROLE_LABELS = LANES.map((lane) => lane.label);
 const MATCHUP_DELTA_THRESHOLD = 5;
 const MATCHUP_MIN_GAMES = 2;
 const DEFAULT_TEAM_NAMES = { Blue: '藍方', Red: '紅方' };
+const PLACEHOLDER_TEAM_NAMES = new Set([DEFAULT_TEAM_NAMES.Blue, DEFAULT_TEAM_NAMES.Red]);
 
 export function getCurrentTeamNames(teamNames = DEFAULT_TEAM_NAMES) {
   return {
@@ -50,14 +51,44 @@ export function collectTeamNameOptions(contexts) {
   return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 }
 
-export function collectOpponentTeamOptions(ourContexts) {
+export function resolveOurTeamSide(ctx, myTeamName = '') {
+  const q = myTeamName?.trim();
+  if (q) {
+    if (ctx.teamNames.Blue === q) return 'Blue';
+    if (ctx.teamNames.Red === q) return 'Red';
+  }
+  return ctx.game.ourSide ?? null;
+}
+
+export function collectOurTeamContexts(contexts, myTeamName = '') {
+  const q = myTeamName?.trim();
+  if (q) {
+    return contexts.filter((ctx) => ctx.teamNames.Blue === q || ctx.teamNames.Red === q);
+  }
+  return collectOurSideContexts(contexts);
+}
+
+export function collectOpponentTeamOptions(contexts, myTeamName = '') {
   const names = new Set();
-  for (const ctx of ourContexts) {
-    const ourSide = ctx.game.ourSide;
+  for (const ctx of contexts) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
     if (!ourSide) continue;
     const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
     const name = ctx.teamNames[enemySide];
     if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+}
+
+export function collectRivalTeamOptions(contexts, myTeamName = '') {
+  const q = myTeamName?.trim();
+  const names = new Set();
+  for (const { teamNames } of contexts) {
+    for (const name of [teamNames.Blue, teamNames.Red]) {
+      if (!name || PLACEHOLDER_TEAM_NAMES.has(name)) continue;
+      if (q && name === q) continue;
+      names.add(name);
+    }
   }
   return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 }
@@ -108,31 +139,33 @@ export function filterContextsByTeam(contexts, teamName) {
   return contexts.filter((ctx) => resolveTeamSide(ctx.teamNames, teamName) != null);
 }
 
-export function filterOurContextsVsTeam(ourContexts, teamName) {
-  if (!teamName) return ourContexts;
-  return ourContexts.filter((ctx) => {
-    const ourSide = ctx.game.ourSide;
+export function filterOurContextsVsTeam(contexts, teamName, myTeamName = '') {
+  if (!teamName) return contexts;
+  return contexts.filter((ctx) => {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
     if (!ourSide) return false;
     const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
     return ctx.teamNames[enemySide] === teamName;
   });
 }
 
-export function applyOurContextFilters(ourContexts, filters = {}) {
-  let result = ourContexts;
+export function applyOurTeamContextFilters(contexts, myTeamName = '', filters = {}) {
+  let result = collectOurTeamContexts(contexts, myTeamName);
 
   if (filters.dateFilter) {
     result = result.filter((ctx) => ctx.startDate === filters.dateFilter);
   }
   if (filters.teamFilter) {
-    result = filterOurContextsVsTeam(result, filters.teamFilter);
+    result = filterOurContextsVsTeam(result, filters.teamFilter, myTeamName);
   }
   if (filters.sideFilter === 'Blue' || filters.sideFilter === 'Red') {
-    result = result.filter((ctx) => ctx.game.ourSide === filters.sideFilter);
+    result = result.filter((ctx) => resolveOurTeamSide(ctx, myTeamName) === filters.sideFilter);
   }
   if (filters.resultFilter === 'win' || filters.resultFilter === 'loss') {
     result = result.filter((ctx) => {
-      const won = ctx.game.winner === ctx.game.ourSide;
+      const ourSide = resolveOurTeamSide(ctx, myTeamName);
+      if (!ourSide) return false;
+      const won = ctx.game.winner === ourSide;
       return filters.resultFilter === 'win' ? won : !won;
     });
   }
@@ -141,6 +174,11 @@ export function applyOurContextFilters(ourContexts, filters = {}) {
   }
 
   return result;
+}
+
+/** @deprecated 請用 applyOurTeamContextFilters */
+export function applyOurContextFilters(ourContexts, filters = {}) {
+  return applyOurTeamContextFilters(ourContexts, '', filters);
 }
 
 function withTrend(rows, baselineWinRate, totalGames, { gamesKey = 'games', winsKey = 'wins' } = {}) {
@@ -241,55 +279,67 @@ function aggregateChampionStats(items, trackWins = true) {
   return { totalGames, champions, roles };
 }
 
-function buildOurItems(contexts) {
-  return contexts.map(({ game }) => {
-    const { bans, picks, pickLanes } = getSideBansPicks(game, game.ourSide);
-    const won = game.winner === game.ourSide;
-    return {
+function buildOurTeamItems(contexts, myTeamName = '') {
+  const items = [];
+  for (const ctx of contexts) {
+    const side = resolveOurTeamSide(ctx, myTeamName);
+    if (!side) continue;
+    const { game } = ctx;
+    const { bans, picks, pickLanes } = getSideBansPicks(game, side);
+    items.push({
       game,
       bans,
       picksWithLanes: getPicksWithLanes(picks, pickLanes),
-      won,
-    };
-  });
-}
-
-function buildEnemyItems(contexts) {
-  return contexts.map(({ game }) => {
-    const ourSide = game.ourSide;
-    const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
-    const { bans, picks, pickLanes } = getSideBansPicks(game, enemySide);
-    const won = game.winner === ourSide;
-    return {
-      game,
-      bans,
-      picksWithLanes: getPicksWithLanes(picks, pickLanes),
-      won,
-    };
-  });
-}
-
-export function computeOverview(ourContexts, filters) {
-  const scoped = applyOurContextFilters(ourContexts, { ...filters, laneCompleteOnly: false });
-  const analyzed = applyOurContextFilters(ourContexts, filters);
-  let wins = 0;
-  for (const { game } of analyzed) {
-    if (game.winner === game.ourSide) wins++;
+      won: game.winner === side,
+    });
   }
-  const losses = analyzed.length - wins;
+  return items;
+}
+
+function buildEnemyTeamItems(contexts, myTeamName = '') {
+  const items = [];
+  for (const ctx of contexts) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (!ourSide) continue;
+    const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
+    const { game } = ctx;
+    const { bans, picks, pickLanes } = getSideBansPicks(game, enemySide);
+    items.push({
+      game,
+      bans,
+      picksWithLanes: getPicksWithLanes(picks, pickLanes),
+      won: game.winner === ourSide,
+    });
+  }
+  return items;
+}
+
+export function computeOverview(contexts, myTeamName, filters) {
+  const scoped = applyOurTeamContextFilters(contexts, myTeamName, { ...filters, laneCompleteOnly: false });
+  const analyzed = applyOurTeamContextFilters(contexts, myTeamName, filters);
+  const decided = analyzed.filter((ctx) => ctx.game.winner);
+  let wins = 0;
+  for (const ctx of decided) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (ourSide && ctx.game.winner === ourSide) wins++;
+  }
+  const losses = decided.length - wins;
   const opponents = new Set();
   for (const ctx of analyzed) {
-    const enemySide = ctx.game.ourSide === 'Blue' ? 'Red' : 'Blue';
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (!ourSide) continue;
+    const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
     opponents.add(ctx.teamNames[enemySide]);
   }
 
   return {
+    myTeamName: myTeamName?.trim() || null,
     totalOurGames: scoped.length,
     analyzedGames: analyzed.length,
     excludedLaneGames: scoped.length - filterLaneCompleteContexts(scoped).length,
     wins,
     losses,
-    winRate: analyzed.length > 0 ? (wins / analyzed.length) * 100 : null,
+    winRate: decided.length > 0 ? (wins / decided.length) * 100 : null,
     opponentCount: opponents.size,
   };
 }
@@ -303,18 +353,30 @@ export function computeOurSideAnalytics(games) {
   return aggregateChampionStats(items, true);
 }
 
-export function computeOurSideSplit(contexts) {
-  const items = buildOurItems(contexts);
-  const blueItems = items.filter((item) => item.game.ourSide === 'Blue');
-  const redItems = items.filter((item) => item.game.ourSide === 'Red');
+export function computeOurSideSplit(contexts, myTeamName = '') {
+  const blueItems = [];
+  const redItems = [];
+  for (const ctx of contexts) {
+    const side = resolveOurTeamSide(ctx, myTeamName);
+    if (!side) continue;
+    const { game } = ctx;
+    const { bans, picks, pickLanes } = getSideBansPicks(game, side);
+    const item = {
+      bans,
+      picksWithLanes: getPicksWithLanes(picks, pickLanes),
+      won: game.winner === side,
+    };
+    if (side === 'Blue') blueItems.push(item);
+    else redItems.push(item);
+  }
   return {
     Blue: aggregateChampionStats(blueItems, true),
     Red: aggregateChampionStats(redItems, true),
   };
 }
 
-export function computeOurChampionLaneStats(contexts) {
-  const items = buildOurItems(contexts);
+export function computeOurChampionLaneStats(contexts, myTeamName = '') {
+  const items = buildOurTeamItems(contexts, myTeamName);
   const totalGames = items.length;
   if (!totalGames) return { totalGames: 0, rows: [] };
 
@@ -340,31 +402,141 @@ export function computeOurChampionLaneStats(contexts) {
   return { totalGames, rows };
 }
 
-export function computeTeamAnalytics(contexts, teamName) {
-  const laneComplete = filterLaneCompleteContexts(filterContextsByTeam(contexts, teamName));
+function buildChampPrimaryLaneMap(items) {
+  const champLaneCounts = new Map();
+  for (const { picksWithLanes } of items) {
+    for (const { id, lane } of picksWithLanes) {
+      if (!champLaneCounts.has(id)) champLaneCounts.set(id, new Map());
+      const laneMap = champLaneCounts.get(id);
+      laneMap.set(lane, (laneMap.get(lane) ?? 0) + 1);
+    }
+  }
+  return champLaneCounts;
+}
+
+function resolvePrimaryLane(champId, champLaneCounts) {
+  const laneMap = champLaneCounts.get(champId);
+  if (!laneMap) return null;
+  let best = null;
+  let bestCount = 0;
+  for (const [lane, count] of laneMap) {
+    if (count > bestCount) {
+      best = lane;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+export function computeOurBanRoleStats(contexts, myTeamName = '') {
+  const items = buildOurTeamItems(contexts, myTeamName);
+  const totalGames = items.length;
+  if (!totalGames) {
+    return {
+      totalGames: 0,
+      roles: LANES.map((lane, idx) => ({
+        label: lane.label,
+        laneId: lane.id,
+        slot: idx + 1,
+        totalGames: 0,
+        laneRate: null,
+        champions: [],
+      })),
+    };
+  }
+
+  const champLaneCounts = buildChampPrimaryLaneMap(items);
+  const roleMaps = new Map(LANES.map((lane) => [lane.id, new Map()]));
+  const gamesWithLaneBan = new Map(LANES.map((lane) => [lane.id, 0]));
+
+  for (const { bans } of items) {
+    const lanesThisGame = new Set();
+    for (const id of bans) {
+      if (!id) continue;
+      const lane = resolvePrimaryLane(id, champLaneCounts);
+      if (!lane) continue;
+      lanesThisGame.add(lane);
+      const roleMap = roleMaps.get(lane);
+      const entry = roleMap.get(id) ?? { id, bans: 0 };
+      entry.bans += 1;
+      roleMap.set(id, entry);
+    }
+    for (const lane of lanesThisGame) {
+      gamesWithLaneBan.set(lane, (gamesWithLaneBan.get(lane) ?? 0) + 1);
+    }
+  }
+
+  const roles = LANES.map((lane, idx) => ({
+    label: lane.label,
+    laneId: lane.id,
+    slot: idx + 1,
+    totalGames,
+    laneRate: ((gamesWithLaneBan.get(lane.id) ?? 0) / totalGames) * 100,
+    champions: [...(roleMaps.get(lane.id)?.values() ?? [])]
+      .map((c) => ({
+        ...c,
+        banRate: (c.bans / totalGames) * 100,
+      }))
+      .sort((a, b) => b.bans - a.bans || a.id.localeCompare(b.id)),
+  }));
+
+  return { totalGames, roles };
+}
+
+export function filterContextsForTeamAnalysis(contexts, teamName, myTeamName = '', filters = {}) {
+  const target = teamName?.trim();
+  const q = myTeamName?.trim();
+  if (!target) return [];
+
+  let result = contexts.filter((ctx) => {
+    const hasTarget = ctx.teamNames.Blue === target || ctx.teamNames.Red === target;
+    if (!hasTarget) return false;
+    if (!q) return true;
+    return ctx.teamNames.Blue === q || ctx.teamNames.Red === q;
+  });
+
+  return applyOurTeamContextFilters(result, myTeamName, { ...filters, teamFilter: '' });
+}
+
+export function computeTeamAnalytics(contexts, teamName, myTeamName = '', filters = {}) {
+  const scoped = filterContextsForTeamAnalysis(contexts, teamName, myTeamName, filters);
   const items = [];
-  for (const ctx of laneComplete) {
+  let wins = 0;
+
+  for (const ctx of scoped) {
     const side = resolveTeamSide(ctx.teamNames, teamName);
     if (!side) continue;
     const { bans, picks, pickLanes } = getSideBansPicks(ctx.game, side);
+    const won = ctx.game.winner === side;
+    if (won) wins += 1;
     items.push({
       bans,
       picksWithLanes: getPicksWithLanes(picks, pickLanes),
-      won: false,
+      won,
     });
   }
+
+  const totalGames = items.length;
+  const stats = aggregateChampionStats(items, true);
+
+  return {
+    ...stats,
+    wins,
+    losses: totalGames - wins,
+    teamWinRate: totalGames > 0 ? (wins / totalGames) * 100 : null,
+  };
+}
+
+export function computeEnemyOverview(contexts, myTeamName = '') {
+  const items = buildEnemyTeamItems(contexts, myTeamName);
   return aggregateChampionStats(items, false);
 }
 
-export function computeEnemyOverview(contexts) {
-  const items = buildEnemyItems(contexts);
-  return aggregateChampionStats(items, false);
-}
-
-export function computeMatchupAnalytics(ourContexts) {
-  const contexts = filterLaneCompleteContexts(ourContexts);
+export function computeMatchupAnalytics(contexts, myTeamName = '') {
+  const scoped = collectOurTeamContexts(contexts, myTeamName);
+  const laneComplete = filterLaneCompleteContexts(scoped);
   let totalWins = 0;
-  const totalGames = contexts.length;
+  const totalGames = laneComplete.length;
 
   if (!totalGames) {
     return { totalGames: 0, baselineWinRate: null, matchups: [] };
@@ -372,8 +544,10 @@ export function computeMatchupAnalytics(ourContexts) {
 
   const map = new Map();
 
-  for (const { game } of contexts) {
-    const ourSide = game.ourSide;
+  for (const ctx of laneComplete) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (!ourSide) continue;
+    const { game } = ctx;
     const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
     const { picks, pickLanes } = getSideBansPicks(game, enemySide);
     const enemyPicks = getPicksWithLanes(picks, pickLanes);
@@ -394,15 +568,18 @@ export function computeMatchupAnalytics(ourContexts) {
   return { totalGames, baselineWinRate, matchups };
 }
 
-export function computeEnemyLaneMatchupAnalytics(ourContexts) {
-  const contexts = filterLaneCompleteContexts(ourContexts);
+export function computeEnemyLaneMatchupAnalytics(contexts, myTeamName = '') {
+  const scoped = collectOurTeamContexts(contexts, myTeamName);
+  const laneComplete = filterLaneCompleteContexts(scoped);
   let totalWins = 0;
-  const totalGames = contexts.length;
+  const totalGames = laneComplete.length;
   if (!totalGames) return { totalGames: 0, baselineWinRate: null, matchups: [] };
 
   const map = new Map();
-  for (const { game } of contexts) {
-    const ourSide = game.ourSide;
+  for (const ctx of laneComplete) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (!ourSide) continue;
+    const { game } = ctx;
     const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
     const { picks, pickLanes } = getSideBansPicks(game, enemySide);
     const enemyPicks = getPicksWithLanes(picks, pickLanes);
@@ -427,15 +604,18 @@ export function computeEnemyLaneMatchupAnalytics(ourContexts) {
   return { totalGames, baselineWinRate, matchups };
 }
 
-export function computeBanMatchupAnalytics(ourContexts, target = 'our') {
-  const contexts = filterLaneCompleteContexts(ourContexts);
+export function computeBanMatchupAnalytics(contexts, myTeamName = '', target = 'our') {
+  const scoped = collectOurTeamContexts(contexts, myTeamName);
+  const laneComplete = filterLaneCompleteContexts(scoped);
   let totalWins = 0;
-  const totalGames = contexts.length;
+  const totalGames = laneComplete.length;
   if (!totalGames) return { totalGames: 0, baselineWinRate: null, matchups: [] };
 
   const map = new Map();
-  for (const { game } of contexts) {
-    const ourSide = game.ourSide;
+  for (const ctx of laneComplete) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (!ourSide) continue;
+    const { game } = ctx;
     const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
     const won = game.winner === ourSide;
     if (won) totalWins += 1;
@@ -460,15 +640,18 @@ export function computeBanMatchupAnalytics(ourContexts, target = 'our') {
   return { totalGames, baselineWinRate, matchups };
 }
 
-export function getEnemyTeamName(ctx) {
-  const enemySide = ctx.game.ourSide === 'Blue' ? 'Red' : 'Blue';
+export function getEnemyTeamName(ctx, myTeamName = '') {
+  const ourSide = resolveOurTeamSide(ctx, myTeamName);
+  if (!ourSide) return null;
+  const enemySide = ourSide === 'Blue' ? 'Red' : 'Blue';
   return ctx.teamNames[enemySide];
 }
 
-export function groupOurContextsByOpponent(contexts) {
+export function groupOurContextsByOpponent(contexts, myTeamName = '') {
   const map = new Map();
   for (const ctx of contexts) {
-    const teamName = getEnemyTeamName(ctx);
+    const teamName = getEnemyTeamName(ctx, myTeamName);
+    if (!teamName) continue;
     if (!map.has(teamName)) map.set(teamName, []);
     map.get(teamName).push(ctx);
   }
@@ -477,11 +660,12 @@ export function groupOurContextsByOpponent(contexts) {
     .sort((a, b) => b.contexts.length - a.contexts.length || a.teamName.localeCompare(b.teamName, 'zh-Hant'));
 }
 
-function computeOpponentSummary(contexts) {
+function computeOpponentSummary(contexts, myTeamName = '') {
   const totalGames = contexts.length;
   let wins = 0;
-  for (const { game } of contexts) {
-    if (game.winner === game.ourSide) wins += 1;
+  for (const ctx of contexts) {
+    const ourSide = resolveOurTeamSide(ctx, myTeamName);
+    if (ourSide && ctx.game.winner === ourSide) wins += 1;
   }
   return {
     totalGames,
@@ -491,26 +675,29 @@ function computeOpponentSummary(contexts) {
   };
 }
 
-export function computeOpponentGroupAnalytics(contexts) {
+export function computeOpponentGroupAnalytics(contexts, myTeamName = '') {
   return {
-    summary: computeOpponentSummary(contexts),
-    enemy: computeEnemyOverview(contexts),
-    enemyLanePresence: computeLanePresenceStats(contexts, 'enemy'),
-    matchupPick: computeMatchupAnalytics(contexts),
-    matchupEnemyLane: computeEnemyLaneMatchupAnalytics(contexts),
-    enemyBan: computeBanMatchupAnalytics(contexts, 'enemy'),
+    summary: computeOpponentSummary(contexts, myTeamName),
+    enemy: computeEnemyOverview(contexts, myTeamName),
+    enemyLanePresence: computeLanePresenceStats(contexts, myTeamName, 'enemy'),
+    matchupPick: computeMatchupAnalytics(contexts, myTeamName),
+    matchupEnemyLane: computeEnemyLaneMatchupAnalytics(contexts, myTeamName),
+    enemyBan: computeBanMatchupAnalytics(contexts, myTeamName, 'enemy'),
   };
 }
 
-export function computeEnemyGroupedAnalytics(contexts) {
-  return groupOurContextsByOpponent(contexts).map(({ teamName, contexts: groupContexts }) => ({
+export function computeEnemyGroupedAnalytics(contexts, myTeamName = '') {
+  return groupOurContextsByOpponent(contexts, myTeamName).map(({ teamName, contexts: groupContexts }) => ({
     teamName,
-    ...computeOpponentGroupAnalytics(groupContexts),
+    ...computeOpponentGroupAnalytics(groupContexts, myTeamName),
   }));
 }
 
-export function computeLanePresenceStats(contexts, side = 'our') {
-  const items = side === 'our' ? buildOurItems(contexts) : buildEnemyItems(contexts);
+export function computeLanePresenceStats(contexts, myTeamName = '', side = 'our') {
+  const items =
+    side === 'our'
+      ? buildOurTeamItems(contexts, myTeamName)
+      : buildEnemyTeamItems(contexts, myTeamName);
   const totalGames = items.length;
   if (!totalGames) {
     return LANES.map((lane) => ({ laneId: lane.id, label: lane.label, picks: 0, pickRate: null }));
@@ -545,25 +732,26 @@ export function applyContextFilters(contexts, filters = {}) {
   return result;
 }
 
-export function computeFullAnalytics(ourContexts, allContexts, filters, analyzeTeam = '') {
-  const analyzedOur = applyOurContextFilters(ourContexts, filters);
-  const filteredAll = applyContextFilters(allContexts, filters);
-  const games = analyzedOur.map((ctx) => ctx.game);
+export function computeFullAnalytics(contexts, allContexts, filters, analyzeTeam = '', myTeamName = '') {
+  const analyzedOur = applyOurTeamContextFilters(contexts, myTeamName, filters);
+  const ourItems = buildOurTeamItems(analyzedOur, myTeamName);
   const teamName = analyzeTeam || null;
 
   return {
-    overview: computeOverview(ourContexts, filters),
-    our: computeOurSideAnalytics(games),
-    ourSplit: computeOurSideSplit(analyzedOur),
-    ourChampionLane: computeOurChampionLaneStats(analyzedOur),
-    enemy: computeEnemyOverview(analyzedOur),
-    enemyLanePresence: computeLanePresenceStats(analyzedOur, 'enemy'),
-    enemyGrouped: computeEnemyGroupedAnalytics(analyzedOur),
-    matchupPick: computeMatchupAnalytics(analyzedOur),
-    matchupEnemyLane: computeEnemyLaneMatchupAnalytics(analyzedOur),
-    ourBan: computeBanMatchupAnalytics(analyzedOur, 'our'),
-    enemyBan: computeBanMatchupAnalytics(analyzedOur, 'enemy'),
-    team: teamName ? computeTeamAnalytics(filteredAll, teamName) : null,
+    overview: computeOverview(contexts, myTeamName, filters),
+    our: aggregateChampionStats(ourItems, true),
+    ourLanePresence: computeLanePresenceStats(analyzedOur, myTeamName, 'our'),
+    ourBanRoles: computeOurBanRoleStats(analyzedOur, myTeamName),
+    ourSplit: computeOurSideSplit(analyzedOur, myTeamName),
+    ourChampionLane: computeOurChampionLaneStats(analyzedOur, myTeamName),
+    enemy: computeEnemyOverview(analyzedOur, myTeamName),
+    enemyLanePresence: computeLanePresenceStats(analyzedOur, myTeamName, 'enemy'),
+    enemyGrouped: computeEnemyGroupedAnalytics(analyzedOur, myTeamName),
+    matchupPick: computeMatchupAnalytics(analyzedOur, myTeamName),
+    matchupEnemyLane: computeEnemyLaneMatchupAnalytics(analyzedOur, myTeamName),
+    ourBan: computeBanMatchupAnalytics(analyzedOur, myTeamName, 'our'),
+    enemyBan: computeBanMatchupAnalytics(analyzedOur, myTeamName, 'enemy'),
+    team: teamName ? computeTeamAnalytics(contexts, teamName, myTeamName, filters) : null,
   };
 }
 

@@ -24,12 +24,16 @@ function normalizeEvent(ev) {
   };
 }
 
+function normalizeWinner(value) {
+  return value === 'Red' ? 'Red' : value === 'Blue' ? 'Blue' : null;
+}
+
 function normalizeHistoryEntry(entry, legacyOurSide = null) {
   if (!entry || typeof entry.game !== 'number') return null;
   const ourSide = normalizeOurSide(entry.ourSide ?? legacyOurSide);
   return {
     game: entry.game,
-    winner: entry.winner === 'Red' ? 'Red' : 'Blue',
+    winner: normalizeWinner(entry.winner),
     ourSide,
     blueTeamName: typeof entry.blueTeamName === 'string' ? entry.blueTeamName : '',
     redTeamName: typeof entry.redTeamName === 'string' ? entry.redTeamName : '',
@@ -276,14 +280,14 @@ function seriesMatchesTeamQuery(series, teamQ) {
 }
 
 export function getOurGameResult(game, ourSide) {
-  if (!ourSide) return null;
+  if (!ourSide || !game.winner) return null;
   if (game.winner === ourSide) return 'win';
   return 'loss';
 }
 
 export function getWinningTeamName(game, series) {
-  const side = game.winner === 'Red' ? 'Red' : 'Blue';
-  return getGameTeamName(game, series, side);
+  if (game.winner !== 'Blue' && game.winner !== 'Red') return null;
+  return getGameTeamName(game, series, game.winner);
 }
 
 export function computeTeamSeriesScore(series) {
@@ -292,6 +296,7 @@ export function computeTeamSeriesScore(series) {
   let scoreB = 0;
   for (const game of series.games ?? []) {
     const winnerName = getWinningTeamName(game, series);
+    if (!winnerName) continue;
     if (winnerName === teamA) scoreA += 1;
     else if (winnerName === teamB) scoreB += 1;
   }
@@ -315,6 +320,7 @@ export function getClinchingGame(series) {
   let scoreB = 0;
   for (const game of series.games ?? []) {
     const winnerName = getWinningTeamName(game, series);
+    if (!winnerName) continue;
     if (winnerName === teamA) scoreA += 1;
     else if (winnerName === teamB) scoreB += 1;
     if (scoreA >= needed || scoreB >= needed) return game;
