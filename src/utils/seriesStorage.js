@@ -281,6 +281,24 @@ export function getOurGameResult(game, ourSide) {
   return 'loss';
 }
 
+export function getWinningTeamName(game, series) {
+  const side = game.winner === 'Red' ? 'Red' : 'Blue';
+  return getGameTeamName(game, series, side);
+}
+
+export function computeTeamSeriesScore(series) {
+  const [teamA, teamB] = getSeriesMatchupNames(series);
+  let scoreA = 0;
+  let scoreB = 0;
+  for (const game of series.games ?? []) {
+    const winnerName = getWinningTeamName(game, series);
+    if (winnerName === teamA) scoreA += 1;
+    else if (winnerName === teamB) scoreB += 1;
+  }
+  return { teamA, teamB, scoreA, scoreB };
+}
+
+/** @deprecated 僅保留相容；請用 computeTeamSeriesScore */
 export function computeScoreFromGames(games) {
   const score = { Blue: 0, Red: 0 };
   for (const game of games ?? []) {
@@ -292,12 +310,14 @@ export function computeScoreFromGames(games) {
 
 export function getClinchingGame(series) {
   const needed = getWinsToWin(series.seriesLength ?? 5);
-  let blue = 0;
-  let red = 0;
+  const [teamA, teamB] = getSeriesMatchupNames(series);
+  let scoreA = 0;
+  let scoreB = 0;
   for (const game of series.games ?? []) {
-    if (game.winner === 'Blue') blue += 1;
-    else if (game.winner === 'Red') red += 1;
-    if (blue >= needed || red >= needed) return game;
+    const winnerName = getWinningTeamName(game, series);
+    if (winnerName === teamA) scoreA += 1;
+    else if (winnerName === teamB) scoreB += 1;
+    if (scoreA >= needed || scoreB >= needed) return game;
   }
   return null;
 }
@@ -311,8 +331,8 @@ export function getOurSeriesResult(series) {
 
 export function isSeriesDecided(series) {
   const needed = getWinsToWin(series.seriesLength ?? 5);
-  const score = series.finalScore ?? { Blue: 0, Red: 0 };
-  return score.Blue >= needed || score.Red >= needed;
+  const { scoreA, scoreB } = computeTeamSeriesScore(series);
+  return scoreA >= needed || scoreB >= needed;
 }
 
 export function computeBoSeriesStats(seriesList, { dateFilter = '', teamFilter = '' } = {}) {

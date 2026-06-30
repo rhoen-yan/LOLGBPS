@@ -7,7 +7,7 @@ export default function Header() {
     saveTeamName,
     updateTeamNameInput,
     teamInputsLocked,
-    currentSeriesScore,
+    teamSeriesScore,
     currentGameNumber,
     phaseInfo,
     startButtonState,
@@ -27,6 +27,8 @@ export default function Header() {
     canEdit,
     teamsBarFlash,
   } = useBp();
+
+  const { teamA, teamB, scoreA, scoreB } = teamSeriesScore;
 
   return (
     <header className="panel p-6 mb-6">
@@ -55,15 +57,20 @@ export default function Header() {
               onChange={(e) => updateTeamNameInput('Blue', e.target.value)}
               onBlur={(e) => saveTeamName('Blue', e.target.value)}
             />
-            <span className="text-2xl font-bold tabular-nums">{currentSeriesScore.Blue}</span>
           </div>
-          <SeriesFormatSelect
-            value={seriesLength}
-            disabled={seriesStarted || !canEdit}
-            onChange={setSeriesLength}
-          />
+          <div className="flex flex-col items-center gap-0.5 min-w-[5rem]">
+            <SeriesFormatSelect
+              value={seriesLength}
+              disabled={seriesStarted || !canEdit}
+              onChange={setSeriesLength}
+            />
+            {seriesStarted && (
+              <p className="text-xs tabular-nums text-gray-400 whitespace-nowrap">
+                {teamA} {scoreA}:{scoreB} {teamB}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold tabular-nums">{currentSeriesScore.Red}</span>
             <input
               className="team-input text-red-400"
               maxLength={20}

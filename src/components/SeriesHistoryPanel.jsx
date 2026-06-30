@@ -9,6 +9,7 @@ import { collectGameChampionIds, getGameChampionsFromIds } from '../utils/champi
 import { isGameLaneComplete, seriesHasIncompleteLanes } from '../utils/pickLanes';
 import {
   computeBoSeriesStats,
+  computeTeamSeriesScore,
   filterSeriesGames,
   getGameTeamName,
   getOurGameResult,
@@ -436,6 +437,7 @@ function SeriesGroup({
 }) {
   const [isOpen, setIsOpen] = useState(true);
   const [teamA, teamB] = getSeriesMatchupNames(series);
+  const { scoreA, scoreB } = computeTeamSeriesScore(series);
   const seriesResult = getOurSeriesResult(series);
   const seriesLanesIncomplete = seriesHasIncompleteLanes(series);
   const filteredGames = useMemo(
@@ -459,7 +461,7 @@ function SeriesGroup({
           <span className="text-gray-300">{teamB}</span>
           <span className="text-gray-400 mx-2">·</span>
           <span className="tabular-nums text-gray-300">
-            {series.finalScore.Blue}:{series.finalScore.Red}
+            {scoreA}:{scoreB}
           </span>
           {seriesResult && (
             <span
@@ -514,7 +516,6 @@ export default function SeriesHistoryPanel() {
     seriesStartDate,
     teamNames,
     seriesLength,
-    currentSeriesScore,
     champions,
     getChampionIconUrl,
     updateSeriesNote,
@@ -547,7 +548,6 @@ export default function SeriesHistoryPanel() {
         startDate: seriesStartDate || '未知',
         seriesLength,
         teamNames: { ...teamNames },
-        finalScore: { ...currentSeriesScore },
         games: seriesHistory,
         isCurrent: true,
       });
@@ -559,7 +559,6 @@ export default function SeriesHistoryPanel() {
     seriesStartDate,
     seriesLength,
     teamNames,
-    currentSeriesScore,
   ]);
 
   const availableDates = useMemo(() => {

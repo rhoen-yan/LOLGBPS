@@ -23,9 +23,10 @@ import {
 import {
   buildArchivedSeriesSnapshot,
   buildSeriesRecordPayload,
-  computeScoreFromGames,
+  computeTeamSeriesScore,
   formatDateYmd,
   getSeriesMatchupNames,
+  getWinningTeamName,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -313,15 +314,20 @@ export function useBpSimulator() {
   }, [loadChampionRoster]);
 
   const winsToWin = getWinsToWin(seriesLength);
-  const seriesStarted = useMemo(
-    () =>
-      bpState.currentStep > 0 ||
-      seriesHistory.length > 0 ||
-      currentSeriesScore.Blue > 0 ||
-      currentSeriesScore.Red > 0,
-    [bpState.currentStep, seriesHistory.length, currentSeriesScore.Blue, currentSeriesScore.Red],
+  const currentSeriesStub = useMemo(
+    () => ({ teamNames, games: seriesHistory }),
+    [teamNames, seriesHistory],
   );
-  const seriesEnded = currentSeriesScore.Blue >= winsToWin || currentSeriesScore.Red >= winsToWin;
+  const teamSeriesScore = useMemo(
+    () => computeTeamSeriesScore(currentSeriesStub),
+    [currentSeriesStub],
+  );
+  const seriesStarted = useMemo(
+    () => bpState.currentStep > 0 || seriesHistory.length > 0,
+    [bpState.currentStep, seriesHistory.length],
+  );
+  const seriesEnded =
+    teamSeriesScore.scoreA >= winsToWin || teamSeriesScore.scoreB >= winsToWin;
 
   const canEditSlots = useCallback(() => {
     if (!canEdit) return false;
@@ -640,46 +646,49 @@ export function useBpSimulator() {
         ]),
       ]);
 
-      setSeriesHistory((prev) => [
-        ...prev,
-        {
-          game: currentGameNumber,
-          winner: winningTeam,
-          ourSide,
-          blueTeamName: getTeamName('Blue'),
-          redTeamName: getTeamName('Red'),
-          blueBans: [...bpState.teamData.Blue.bans],
-          redBans: [...bpState.teamData.Red.bans],
-          bluePicks: [...bpState.teamData.Blue.picks],
-          redPicks: [...bpState.teamData.Red.picks],
-          bluePickLanes: emptyPickLanes(),
-          redPickLanes: emptyPickLanes(),
-          note: '',
-          events: [],
-        },
-      ]);
+      setSeriesHistory((prev) => {
+        const next = [
+          ...prev,
+          {
+            game: currentGameNumber,
+            winner: winningTeam,
+            ourSide,
+            blueTeamName: getTeamName('Blue'),
+            redTeamName: getTeamName('Red'),
+            blueBans: [...bpState.teamData.Blue.bans],
+            redBans: [...bpState.teamData.Red.bans],
+            bluePicks: [...bpState.teamData.Blue.picks],
+            redPicks: [...bpState.teamData.Red.picks],
+            bluePickLanes: emptyPickLanes(),
+            redPickLanes: emptyPickLanes(),
+            note: '',
+            events: [],
+          },
+        ];
 
-      setOurSide(null);
-
-      setCurrentSeriesScore((prev) => {
-        const next = { ...prev, [winningTeam]: prev[winningTeam] + 1 };
+        const { teamA, teamB, scoreA, scoreB } = computeTeamSeriesScore({
+          teamNames,
+          games: next,
+        });
         const needed = getWinsToWin(seriesLength);
-        if (next.Blue < needed && next.Red < needed) {
+        const winnerName = getWinningTeamName(next[next.length - 1], { teamNames, games: next });
+
+        if (scoreA < needed && scoreB < needed) {
           setCurrentGameNumber((g) => g + 1);
           resetGame();
         } else {
-          showModal(
-            '系列賽結束',
-            winningTeam === 'Blue'
-              ? `${getTeamName('Blue')} 以 ${next.Blue}:${next.Red} 贏得系列賽`
-              : `${getTeamName('Red')} 以 ${next.Red}:${next.Blue} 贏得系列賽`,
-          );
+          const wScore = winnerName === teamA ? scoreA : scoreB;
+          const lScore = winnerName === teamA ? scoreB : scoreA;
+          showModal('系列賽結束', `${winnerName} 以 ${wScore}:${lScore} 贏得系列賽`);
         }
+
         return next;
       });
+
+      setOurSide(null);
       setTeamInputsLocked(false);
     },
-    [canEdit, bpState, currentGameNumber, seriesLength, ourSide, getTeamName, showModal, resetGame],
+    [canEdit, bpState, currentGameNumber, seriesLength, ourSide, teamNames, getTeamName, showModal, resetGame],
   );
 
   const patchSeriesGame = useCallback((seriesId, gameNumber, patchFn) => {
@@ -773,11 +782,10 @@ export function useBpSimulator() {
           const next = prev.map((g) =>
             g.game === gameNumber ? { ...g, winner: normalized } : g,
           );
-          const nextScore = computeScoreFromGames(next);
+          const { scoreA, scoreB } = computeTeamSeriesScore({ teamNames, games: next });
           const needed = getWinsToWin(seriesLength);
-          const ended = nextScore.Blue >= needed || nextScore.Red >= needed;
+          const ended = scoreA >= needed || scoreB >= needed;
 
-          setCurrentSeriesScore(nextScore);
           setCurrentGameNumber(ended ? next.length : next.length + 1);
 
           return next;
@@ -793,11 +801,11 @@ export function useBpSimulator() {
           const games = series.games.map((g) =>
             g.game === gameNumber ? { ...g, winner: normalized } : g,
           );
-          return { ...series, games, finalScore: computeScoreFromGames(games) };
+          return { ...series, games };
         }),
       );
     },
-    [canEdit, seriesLength],
+    [canEdit, seriesLength, teamNames],
   );
 
   const updateGameOurSide = useCallback(
@@ -881,10 +889,9 @@ export function useBpSimulator() {
 
   const phaseInfo = useMemo(() => {
     if (seriesEnded) {
-      if (currentSeriesScore.Blue >= winsToWin) {
-        return { html: true, content: `<span class="text-blue-400">${getTeamName('Blue')} 系列賽獲勝</span>` };
-      }
-      return { html: true, content: `<span class="text-red-400">${getTeamName('Red')} 系列賽獲勝</span>` };
+      const winner =
+        teamSeriesScore.scoreA >= winsToWin ? teamSeriesScore.teamA : teamSeriesScore.teamB;
+      return { text: `${winner} 系列賽獲勝` };
     }
     if (bpState.currentStep > DRAFT_FLOW.length) {
       return { text: '選角完成，請宣告勝利' };
@@ -900,7 +907,7 @@ export function useBpSimulator() {
       html: true,
       content: `<span class="${color}">${teamLabel} ${action.description}</span> · ${actionLabel}`,
     };
-  }, [seriesEnded, currentSeriesScore, winsToWin, bpState.currentStep, getTeamName]);
+  }, [seriesEnded, teamSeriesScore, winsToWin, bpState.currentStep, getTeamName]);
 
   const startButtonState = useMemo(() => {
     if (seriesEnded) return { text: '已結束', disabled: true };
@@ -955,7 +962,7 @@ export function useBpSimulator() {
     canEdit,
     tryUnlockEdit,
     lockEdit,
-    currentSeriesScore,
+    teamSeriesScore,
     currentGameNumber,
     seriesLength,
     seriesStarted,
