@@ -756,6 +756,45 @@ export function useBpSimulator() {
     [canEdit, seriesLength],
   );
 
+  const updateGameOurSide = useCallback(
+    (seriesId, gameNumber, ourSide) => {
+      if (!canEdit) return;
+      const normalized = ourSide === 'Red' ? 'Red' : 'Blue';
+      patchSeriesGame(seriesId, gameNumber, (game) => {
+        if (game.ourSide === normalized) return game;
+        return { ...game, ourSide: normalized };
+      });
+    },
+    [canEdit, patchSeriesGame],
+  );
+
+  const renameTeamNameGlobally = useCallback(
+    (side, oldName, newName) => {
+      if (!canEdit) return;
+      const trimmed = newName.trim();
+      if (!trimmed || trimmed === oldName) return;
+
+      setArchivedSeries((prev) =>
+        prev.map((series) => {
+          if (getSeriesTeamName(series, side) !== oldName) return series;
+          return {
+            ...series,
+            teamNames: { ...series.teamNames, [side]: trimmed },
+          };
+        }),
+      );
+
+      setTeamNames((prev) => {
+        const current = getSeriesTeamName({ teamNames: prev }, side);
+        if (current !== oldName) return prev;
+        return { ...prev, [side]: trimmed };
+      });
+
+      setMyTeamName((prev) => (prev.trim() === oldName ? trimmed : prev));
+    },
+    [canEdit],
+  );
+
   const onSlotDragStart = useCallback(
     (e, slotId, championId) => {
       if (!canEditSlots()) {
@@ -927,6 +966,8 @@ export function useBpSimulator() {
     updateSeriesEvent,
     removeSeriesEvent,
     updateGameWinner,
+    updateGameOurSide,
+    renameTeamNameGlobally,
     requestRemoveSeries,
     onSlotDragStart,
     onChampDragStart,

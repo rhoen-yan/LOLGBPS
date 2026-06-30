@@ -20,6 +20,54 @@ function IncompleteLanesBadge() {
   return <span className="lane-incomplete-badge">尚有路線未標</span>;
 }
 
+function EditableSeriesTeamName({ side, name, canEdit, onRename }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const color = side === 'Blue' ? 'text-blue-400' : 'text-red-400';
+
+  const commit = () => {
+    onRename(side, name, draft);
+    setEditing(false);
+  };
+
+  const startEdit = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!canEdit) return;
+    setDraft(name);
+    setEditing(true);
+  };
+
+  if (editing) {
+    return (
+      <input
+        type="text"
+        className={`bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-sm min-w-[4rem] max-w-[8rem] ${color}`}
+        value={draft}
+        maxLength={20}
+        autoFocus
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setEditing(false);
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`${color}${canEdit ? ' cursor-text' : ''}`}
+      onDoubleClick={startEdit}
+    >
+      {name}
+    </span>
+  );
+}
+
 function ChampBanRow({ ids, champions, getChampionIconUrl }) {
   if (!ids?.length) {
     return <span className="text-xs text-gray-600">—</span>;
@@ -175,6 +223,7 @@ function GameRecord({
   updateSeriesNote,
   updateGamePickLane,
   updateGameWinner,
+  updateGameOurSide,
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
@@ -189,6 +238,9 @@ function GameRecord({
   const otherWinner = record.winner === 'Blue' ? 'Red' : 'Blue';
   const otherWinnerName = otherWinner === 'Blue' ? blueName : redName;
   const ourResult = getOurGameResult(record, record.ourSide);
+  const ourSideName = record.ourSide === 'Blue' ? blueName : record.ourSide === 'Red' ? redName : null;
+  const otherOurSide = record.ourSide === 'Blue' ? 'Red' : 'Blue';
+  const otherOurSideName = otherOurSide === 'Blue' ? blueName : redName;
   const gameChampions = getGameChampionsFromIds(collectGameChampionIds(record), champions);
   const lanesIncomplete = !isGameLaneComplete(record);
   const isCurrentSeries = Boolean(series.isCurrent);
@@ -214,7 +266,32 @@ function GameRecord({
           <span className="text-sm font-semibold">第 {record.game} 局</span>
           {lanesIncomplete && <IncompleteLanesBadge />}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {ourSideName && (
+            <span className="text-xs text-gray-500">
+              我方
+              <span
+                className={`ml-1 font-medium ${
+                  record.ourSide === 'Blue' ? 'text-blue-400' : 'text-red-400'
+                }`}
+              >
+                {ourSideName}
+              </span>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="ml-1 p-0.5 rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700/60 transition align-middle"
+                  title={`改我方為${otherOurSideName}`}
+                  aria-label={`改我方為${otherOurSideName}`}
+                  onClick={() => updateGameOurSide(series.id, record.game, otherOurSide)}
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4" />
+                  </svg>
+                </button>
+              )}
+            </span>
+          )}
           {ourResult && (
             <span
               className={`text-xs font-medium px-2 py-0.5 rounded ${
@@ -330,10 +407,12 @@ function SeriesGroup({
   updateSeriesNote,
   updateGamePickLane,
   updateGameWinner,
+  updateGameOurSide,
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
   requestRemoveSeries,
+  renameTeamNameGlobally,
   canEdit,
   filters,
 }) {
@@ -358,9 +437,19 @@ function SeriesGroup({
       <summary className="history-series-summary cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-lg">
         <span className="history-series-summary-content">
           <span className="mr-2">{formatSeriesLabel(series.seriesLength)}</span>
-          <span className="text-blue-400">{blueName}</span>
+          <EditableSeriesTeamName
+            side="Blue"
+            name={blueName}
+            canEdit={canEdit}
+            onRename={renameTeamNameGlobally}
+          />
           <span className="text-gray-500 mx-1.5">vs</span>
-          <span className="text-red-400">{redName}</span>
+          <EditableSeriesTeamName
+            side="Red"
+            name={redName}
+            canEdit={canEdit}
+            onRename={renameTeamNameGlobally}
+          />
           <span className="text-gray-400 mx-2">·</span>
           <span className="tabular-nums text-gray-300">
             {series.finalScore.Blue}:{series.finalScore.Red}
@@ -398,6 +487,7 @@ function SeriesGroup({
             updateSeriesNote={updateSeriesNote}
             updateGamePickLane={updateGamePickLane}
             updateGameWinner={updateGameWinner}
+            updateGameOurSide={updateGameOurSide}
             addSeriesEvent={addSeriesEvent}
             updateSeriesEvent={updateSeriesEvent}
             removeSeriesEvent={removeSeriesEvent}
@@ -422,10 +512,12 @@ export default function SeriesHistoryPanel() {
     updateSeriesNote,
     updateGamePickLane,
     updateGameWinner,
+    updateGameOurSide,
     addSeriesEvent,
     updateSeriesEvent,
     removeSeriesEvent,
     requestRemoveSeries,
+    renameTeamNameGlobally,
     canEdit,
   } = useBp();
 
@@ -579,10 +671,12 @@ export default function SeriesHistoryPanel() {
                     updateSeriesNote={updateSeriesNote}
                     updateGamePickLane={updateGamePickLane}
                     updateGameWinner={updateGameWinner}
+                    updateGameOurSide={updateGameOurSide}
                     addSeriesEvent={addSeriesEvent}
                     updateSeriesEvent={updateSeriesEvent}
                     removeSeriesEvent={removeSeriesEvent}
                     requestRemoveSeries={requestRemoveSeries}
+                    renameTeamNameGlobally={renameTeamNameGlobally}
                     canEdit={canEdit}
                     filters={filters}
                   />
