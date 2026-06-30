@@ -1,7 +1,7 @@
 import { useBp } from '../context/BpContext';
 
 export default function SettingsPage() {
-  const { myTeamName, saveMyTeamName, updateMyTeamNameInput } = useBp();
+  const { myTeamName, saveMyTeamName, updateMyTeamNameInput, canEdit } = useBp();
 
   return (
     <section className="panel p-6">
@@ -13,6 +13,7 @@ export default function SettingsPage() {
           maxLength={20}
           placeholder="隊名"
           value={myTeamName}
+          disabled={!canEdit}
           onChange={(e) => updateMyTeamNameInput(e.target.value)}
           onBlur={(e) => saveMyTeamName(e.target.value)}
         />

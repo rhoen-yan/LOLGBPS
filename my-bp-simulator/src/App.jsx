@@ -3,6 +3,7 @@ import { BpContext } from './context/BpContext';
 import { useBpSimulator } from './hooks/useBpSimulator';
 import AppNav from './components/AppNav';
 import Modal from './components/Modal';
+import PasswordGate from './components/PasswordGate';
 import SimulatorPage from './pages/SimulatorPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
@@ -23,6 +24,7 @@ export default function App() {
         </div>
       </BrowserRouter>
       <Modal />
+      <PasswordGate />
     </BpContext.Provider>
   );
 }

@@ -177,6 +177,7 @@ function GameRecord({
   addSeriesEvent,
   updateSeriesEvent,
   removeSeriesEvent,
+  canEdit,
 }) {
   const [laneSelection, setLaneSelection] = useState(null);
   const winnerCls = record.winner === 'Blue' ? 'winner-blue' : 'winner-red';
@@ -188,14 +189,17 @@ function GameRecord({
   const gameChampions = getGameChampionsFromIds(collectGameChampionIds(record), champions);
   const lanesIncomplete = !isGameLaneComplete(record);
   const isCurrentSeries = Boolean(series.isCurrent);
+  const readOnly = !isCurrentSeries || !canEdit;
 
   const handlePickSelect = (side, index) => {
+    if (readOnly) return;
     setLaneSelection((prev) =>
       prev?.side === side && prev?.index === index ? null : { side, index },
     );
   };
 
   const handleLaneSelect = (side, index, laneId) => {
+    if (readOnly) return;
     updateGamePickLane(series.id, record.game, side, index, laneId);
     setLaneSelection(null);
   };
@@ -248,18 +252,18 @@ function GameRecord({
       </div>
       <div className="mt-3">
         <p className="text-[10px] text-gray-500 mb-1">備註</p>
-        {isCurrentSeries ? (
-          <ChampionMentionField
-            value={record.note || ''}
-            onChange={(note) => updateSeriesNote(series.id, record.game, note)}
-            placeholder="備註… @ 當局英雄、! 全英雄"
+        {readOnly ? (
+          <ChampionMentionDisplay
+            text={record.note}
             champions={champions}
             gameChampions={gameChampions}
             getChampionIconUrl={getChampionIconUrl}
           />
         ) : (
-          <ChampionMentionDisplay
-            text={record.note}
+          <ChampionMentionField
+            value={record.note || ''}
+            onChange={(note) => updateSeriesNote(series.id, record.game, note)}
+            placeholder="備註… @ 當局英雄、! 全英雄"
             champions={champions}
             gameChampions={gameChampions}
             getChampionIconUrl={getChampionIconUrl}
@@ -276,7 +280,7 @@ function GameRecord({
         addSeriesEvent={addSeriesEvent}
         updateSeriesEvent={updateSeriesEvent}
         removeSeriesEvent={removeSeriesEvent}
-        readOnly={!isCurrentSeries}
+        readOnly={readOnly}
       />
     </div>
   );
@@ -313,6 +317,7 @@ function SeriesGroup({
   updateSeriesEvent,
   removeSeriesEvent,
   requestRemoveSeries,
+  canEdit,
   filters,
 }) {
   const [isOpen, setIsOpen] = useState(true);
@@ -363,7 +368,7 @@ function SeriesGroup({
             </span>
           )}
         </span>
-        {!isOpen && <SeriesRemoveButton onClick={() => requestRemoveSeries(series)} />}
+        {canEdit && <SeriesRemoveButton onClick={() => requestRemoveSeries(series)} />}
       </summary>
       <div className="px-2 pb-3 pt-1 space-y-3">
         {filteredGames.map((r) => (
@@ -378,6 +383,7 @@ function SeriesGroup({
             addSeriesEvent={addSeriesEvent}
             updateSeriesEvent={updateSeriesEvent}
             removeSeriesEvent={removeSeriesEvent}
+            canEdit={canEdit}
           />
         ))}
       </div>
@@ -401,6 +407,7 @@ export default function SeriesHistoryPanel() {
     updateSeriesEvent,
     removeSeriesEvent,
     requestRemoveSeries,
+    canEdit,
   } = useBp();
 
   const [dateFilter, setDateFilter] = useState('');
@@ -556,6 +563,7 @@ export default function SeriesHistoryPanel() {
                     updateSeriesEvent={updateSeriesEvent}
                     removeSeriesEvent={removeSeriesEvent}
                     requestRemoveSeries={requestRemoveSeries}
+                    canEdit={canEdit}
                     filters={filters}
                   />
                 ))}

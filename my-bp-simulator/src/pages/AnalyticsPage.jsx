@@ -430,7 +430,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     let cancelled = false;
     loadPersistedRecord()
-      .then((data) => {
+      .then(({ record: data }) => {
         if (!cancelled) setRecord(data);
       })
       .finally(() => {

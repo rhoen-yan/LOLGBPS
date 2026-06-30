@@ -1,5 +1,6 @@
 export const STORAGE_BLUE = 'bp-blue-team-name';
 export const STORAGE_RED = 'bp-red-team-name';
+export const EDIT_PASSWORD = 'ssheep';
 export const DEFAULT_DDRAGON_VERSION = '14.19.1';
 export const SERIES_LENGTH_OPTIONS = [1, 2, 3, 4, 5];
 

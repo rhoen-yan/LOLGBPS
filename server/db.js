@@ -65,26 +65,41 @@ export async function ensureDb() {
   return true;
 }
 
-export async function getRecord() {
+export async function getRecordWithMeta() {
   await ensureDb();
   const db = getPool();
-  if (!db) return memoryRecord;
-  const result = await db.query('SELECT data FROM app_record WHERE id = $1', ['default']);
+  if (!db) {
+    return memoryRecord ? { data: memoryRecord, updatedAt: memoryUpdatedAt } : null;
+  }
+  const result = await db.query('SELECT data, updated_at FROM app_record WHERE id = $1', ['default']);
   if (!result.rows.length) return null;
-  return result.rows[0].data;
+  return {
+    data: result.rows[0].data,
+    updatedAt: result.rows[0].updated_at?.toISOString?.() ?? null,
+  };
 }
+
+export async function getRecord() {
+  const meta = await getRecordWithMeta();
+  return meta?.data ?? null;
+}
+
+let memoryUpdatedAt = null;
 
 export async function saveRecord(data) {
   await ensureDb();
   const db = getPool();
   if (!db) {
     memoryRecord = data;
-    return;
+    memoryUpdatedAt = new Date().toISOString();
+    return memoryUpdatedAt;
   }
-  await db.query(
+  const result = await db.query(
     `INSERT INTO app_record (id, data, updated_at)
      VALUES ($1, $2::jsonb, NOW())
-     ON CONFLICT (id) DO UPDATE SET data = $2::jsonb, updated_at = NOW()`,
+     ON CONFLICT (id) DO UPDATE SET data = $2::jsonb, updated_at = NOW()
+     RETURNING updated_at`,
     ['default', JSON.stringify(data)],
   );
+  return result.rows[0]?.updated_at?.toISOString?.() ?? null;
 }

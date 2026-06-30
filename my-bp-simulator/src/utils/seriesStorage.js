@@ -1,4 +1,4 @@
-import { SERIES_LENGTH_OPTIONS, getWinsToWin } from '../constants';
+import { SERIES_LENGTH_OPTIONS, getWinsToWin, createEmptyBpState } from '../constants';
 import { createSeriesEventId } from './championMention';
 import { normalizePickLanes } from './pickLanes';
 
@@ -97,6 +97,34 @@ function normalizeArchivedSeries(entry) {
   };
 }
 
+function normalizeBpState(state) {
+  const base = createEmptyBpState();
+  if (!state || typeof state !== 'object') return base;
+  const step = Number(state.currentStep);
+  const normalizeList = (list) =>
+    Array.isArray(list) ? list.filter((id) => typeof id === 'string') : [];
+  const blueBans = normalizeList(state.teamData?.Blue?.bans);
+  const bluePicks = normalizeList(state.teamData?.Blue?.picks);
+  const redBans = normalizeList(state.teamData?.Red?.bans);
+  const redPicks = normalizeList(state.teamData?.Red?.picks);
+  return {
+    currentStep: Number.isFinite(step) && step >= 0 ? step : 0,
+    selectedChampions: normalizeList(state.selectedChampions),
+    banCounts: {
+      Blue: Number.isFinite(state.banCounts?.Blue) ? state.banCounts.Blue : blueBans.length,
+      Red: Number.isFinite(state.banCounts?.Red) ? state.banCounts.Red : redBans.length,
+    },
+    pickCounts: {
+      Blue: Number.isFinite(state.pickCounts?.Blue) ? state.pickCounts.Blue : bluePicks.length,
+      Red: Number.isFinite(state.pickCounts?.Red) ? state.pickCounts.Red : redPicks.length,
+    },
+    teamData: {
+      Blue: { bans: blueBans, picks: bluePicks },
+      Red: { bans: redBans, picks: redPicks },
+    },
+  };
+}
+
 function normalizeCurrentSeries(data) {
   const legacyOurSide = normalizeOurSide(data?.ourSide);
   const seriesHistory = Array.isArray(data?.seriesHistory)
@@ -115,6 +143,8 @@ function normalizeCurrentSeries(data) {
     seriesPickedChampions: Array.isArray(data?.seriesPickedChampions)
       ? data.seriesPickedChampions.filter((id) => typeof id === 'string')
       : [],
+    bpState: normalizeBpState(data?.bpState),
+    teamInputsLocked: Boolean(data?.teamInputsLocked),
   };
 }
 

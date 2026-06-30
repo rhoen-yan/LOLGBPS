@@ -3,6 +3,7 @@ import {
   createEmptyBpState,
   DEFAULT_DDRAGON_VERSION,
   DRAFT_FLOW,
+  EDIT_PASSWORD,
   formatSeriesLabel,
   getTeamArray,
   getWinsToWin,
@@ -10,13 +11,20 @@ import {
 import { fetchChampionRoster } from '../utils/championRoster';
 import { createSeriesEventId } from '../utils/championMention';
 import { emptyPickLanes } from '../utils/pickLanes';
-import { loadPersistedRecord, schedulePersistRecord } from '../utils/recordApi';
+import {
+  fetchRemoteRecordMeta,
+  getLastSavedUpdatedAt,
+  isSavePending,
+  loadPersistedRecord,
+  readEditUnlocked,
+  schedulePersistRecord,
+  writeEditUnlocked,
+} from '../utils/recordApi';
 import {
   buildArchivedSeriesSnapshot,
   buildSeriesRecordPayload,
   formatDateYmd,
   getSeriesTeamName,
-  resolveOurSideFromTeamNames,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -45,6 +53,7 @@ export function useBpSimulator() {
   const [seriesHistory, setSeriesHistory] = useState([]);
   const [seriesPickedChampions, setSeriesPickedChampions] = useState([]);
   const [recordHydrated, setRecordHydrated] = useState(false);
+  const [canEdit, setCanEdit] = useState(() => readEditUnlocked());
   const [bpState, setBpState] = useState(createEmptyBpState);
   const [search, setSearch] = useState('');
   const [teamInputsLocked, setTeamInputsLocked] = useState(false);
@@ -57,6 +66,37 @@ export function useBpSimulator() {
 
   const dragPayloadRef = useRef(null);
   const modalDismissRef = useRef(null);
+  const lastAppliedRemoteAtRef = useRef(null);
+
+  const tryUnlockEdit = useCallback((password) => {
+    if (password !== EDIT_PASSWORD) return false;
+    setCanEdit(true);
+    writeEditUnlocked(true);
+    return true;
+  }, []);
+
+  const lockEdit = useCallback(() => {
+    setCanEdit(false);
+    writeEditUnlocked(false);
+  }, []);
+
+  const applyRecordSnapshot = useCallback((saved) => {
+    if (!saved) return;
+    setArchivedSeries(saved.archivedSeries ?? []);
+    if (saved.teamNames) setTeamNames(saved.teamNames);
+    if (saved.settings?.myTeamName !== undefined) setMyTeamName(saved.settings.myTeamName);
+    const savedCurrent = saved.current;
+    if (!savedCurrent) return;
+    setSeriesStartDate(savedCurrent.startDate ?? null);
+    setOurSide(savedCurrent.ourSide ?? null);
+    setCurrentSeriesScore(savedCurrent.currentSeriesScore ?? { Blue: 0, Red: 0 });
+    setCurrentGameNumber(savedCurrent.currentGameNumber ?? 1);
+    setSeriesLength(savedCurrent.seriesLength ?? 5);
+    setSeriesHistory(savedCurrent.seriesHistory ?? []);
+    setSeriesPickedChampions(savedCurrent.seriesPickedChampions ?? []);
+    if (savedCurrent.bpState) setBpState(savedCurrent.bpState);
+    setTeamInputsLocked(Boolean(savedCurrent.teamInputsLocked));
+  }, []);
 
   const getChampionIconUrl = useCallback(
     (id) => `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`,
@@ -93,9 +133,10 @@ export function useBpSimulator() {
   }, [modal.onConfirm]);
 
   const saveTeamName = useCallback((side, value) => {
+    if (!canEdit) return;
     const trimmed = value.trim() || (side === 'Blue' ? '藍方' : '紅方');
     setTeamNames((prev) => ({ ...prev, [side]: trimmed }));
-  }, []);
+  }, [canEdit]);
 
   const updateTeamNameInput = useCallback((side, value) => {
     setTeamNames((prev) => ({ ...prev, [side]: value }));
@@ -106,60 +147,49 @@ export function useBpSimulator() {
   }, []);
 
   const saveMyTeamName = useCallback((value) => {
+    if (!canEdit) return;
     setMyTeamName(value.trim());
-  }, []);
+  }, [canEdit]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const saved = await loadPersistedRecord();
+      const { record: saved, updatedAt } = await loadPersistedRecord();
       if (cancelled) return;
-      const savedCurrent = saved?.current;
-      if (saved?.archivedSeries) setArchivedSeries(saved.archivedSeries);
-      if (saved?.teamNames) setTeamNames(saved.teamNames);
-      if (saved?.settings?.myTeamName) setMyTeamName(saved.settings.myTeamName);
-      if (savedCurrent) {
-        setSeriesStartDate(savedCurrent.startDate ?? null);
-        setOurSide(savedCurrent.ourSide ?? null);
-        setCurrentSeriesScore(savedCurrent.currentSeriesScore ?? { Blue: 0, Red: 0 });
-        setCurrentGameNumber(savedCurrent.currentGameNumber ?? 1);
-        setSeriesLength(savedCurrent.seriesLength ?? 5);
-        setSeriesHistory(savedCurrent.seriesHistory ?? []);
-        setSeriesPickedChampions(savedCurrent.seriesPickedChampions ?? []);
-      }
+      if (saved) applyRecordSnapshot(saved);
+      if (updatedAt) lastAppliedRemoteAtRef.current = updatedAt;
       setRecordHydrated(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    if (!teamsBarFlash) return;
-    const id = window.setTimeout(() => setTeamsBarFlash(false), 1400);
-    return () => window.clearTimeout(id);
-  }, [teamsBarFlash]);
+  }, [applyRecordSnapshot]);
 
   useEffect(() => {
     if (!recordHydrated) return;
-    schedulePersistRecord(
-      buildSeriesRecordPayload({
-        archivedSeries,
-        teamNames,
-        settings: { myTeamName },
-        current: {
-          startDate: seriesStartDate,
-          ourSide,
-          seriesLength,
-          currentSeriesScore,
-          currentGameNumber,
-          seriesHistory,
-          seriesPickedChampions,
-        },
-      }),
-    );
+    const payload = buildSeriesRecordPayload({
+      archivedSeries,
+      teamNames,
+      settings: { myTeamName },
+      current: {
+        startDate: seriesStartDate,
+        ourSide,
+        seriesLength,
+        currentSeriesScore,
+        currentGameNumber,
+        seriesHistory,
+        seriesPickedChampions,
+        bpState,
+        teamInputsLocked,
+      },
+    });
+    if (!canEdit) return;
+    schedulePersistRecord(payload, (updatedAt) => {
+      if (updatedAt) lastAppliedRemoteAtRef.current = updatedAt;
+    });
   }, [
     recordHydrated,
+    canEdit,
     archivedSeries,
     teamNames,
     myTeamName,
@@ -170,7 +200,38 @@ export function useBpSimulator() {
     currentGameNumber,
     seriesLength,
     seriesPickedChampions,
+    bpState,
+    teamInputsLocked,
   ]);
+
+  useEffect(() => {
+    if (!recordHydrated) return;
+    const poll = async () => {
+      if (isSavePending()) return;
+      try {
+        const { record, updatedAt } = await fetchRemoteRecordMeta();
+        if (!record || !updatedAt) return;
+        if (updatedAt === lastAppliedRemoteAtRef.current) return;
+        if (canEdit && updatedAt === getLastSavedUpdatedAt()) {
+          lastAppliedRemoteAtRef.current = updatedAt;
+          return;
+        }
+        applyRecordSnapshot(record);
+        lastAppliedRemoteAtRef.current = updatedAt;
+      } catch {
+        /* polling fallback */
+      }
+    };
+    poll();
+    const id = window.setInterval(poll, 2000);
+    return () => window.clearInterval(id);
+  }, [recordHydrated, canEdit, applyRecordSnapshot]);
+
+  useEffect(() => {
+    if (!teamsBarFlash) return;
+    const id = window.setTimeout(() => setTeamsBarFlash(false), 1400);
+    return () => window.clearTimeout(id);
+  }, [teamsBarFlash]);
 
   const loadChampionRoster = useCallback(async () => {
     setChampionLoadStatus('loading');
@@ -203,9 +264,10 @@ export function useBpSimulator() {
   const seriesEnded = currentSeriesScore.Blue >= winsToWin || currentSeriesScore.Red >= winsToWin;
 
   const canEditSlots = useCallback(() => {
+    if (!canEdit) return false;
     if (seriesEnded) return false;
     return bpState.currentStep > 0;
-  }, [seriesEnded, bpState.currentStep]);
+  }, [canEdit, seriesEnded, bpState.currentStep]);
 
   const isActiveSlot = useCallback(
     (team, type, index) => {
@@ -221,13 +283,14 @@ export function useBpSimulator() {
 
   const canDropOnSlot = useCallback(
     (team, type, index) => {
+      if (!canEdit) return false;
       if (!canEditSlots()) return false;
       const arr = getTeamArray(bpState.teamData, team, type);
       if (index <= arr.length) return true;
       if (bpState.currentStep > DRAFT_FLOW.length) return false;
       return isActiveSlot(team, type, index);
     },
-    [canEditSlots, bpState, isActiveSlot],
+    [canEdit, canEditSlots, bpState, isActiveSlot],
   );
 
   const isChampionUsedElsewhere = useCallback(
@@ -269,6 +332,7 @@ export function useBpSimulator() {
 
   const handleSelection = useCallback(
     (championId) => {
+      if (!canEdit) return;
       if (championLoadStatus !== 'success') return;
       if (bpState.currentStep === 0 || bpState.currentStep > DRAFT_FLOW.length) {
         showModal('提示', '請先點擊「開始選角」。');
@@ -296,7 +360,7 @@ export function useBpSimulator() {
         return next;
       });
     },
-    [championLoadStatus, bpState, seriesPickedChampions, champions, showModal],
+    [canEdit, championLoadStatus, bpState, seriesPickedChampions, champions, showModal],
   );
 
   const assignChampionToSlot = useCallback(
@@ -371,6 +435,7 @@ export function useBpSimulator() {
   }, []);
 
   const resetCurrentGame = useCallback(() => {
+    if (!canEdit) return;
     if (bpState.currentStep === 0) {
       showModal('提示', '本局尚未開始。');
       return;
@@ -384,7 +449,7 @@ export function useBpSimulator() {
       `確定要重置第 ${currentGameNumber} 局 B/P？系列賽比分不會變動。`,
       () => resetGame(),
     );
-  }, [bpState.currentStep, seriesEnded, showModal, showConfirmModal, currentGameNumber, resetGame]);
+  }, [canEdit, bpState.currentStep, seriesEnded, showModal, showConfirmModal, currentGameNumber, resetGame]);
 
   const archiveCurrentSeries = useCallback(() => {
     const snapshot = buildArchivedSeriesSnapshot({
@@ -412,6 +477,7 @@ export function useBpSimulator() {
 
   const requestRemoveSeries = useCallback(
     (series) => {
+      if (!canEdit) return;
       const blueName = getSeriesTeamName(series, 'Blue');
       const redName = getSeriesTeamName(series, 'Red');
       showConfirmModal(
@@ -426,10 +492,11 @@ export function useBpSimulator() {
         },
       );
     },
-    [showConfirmModal, clearCurrentSeries],
+    [canEdit, showConfirmModal, clearCurrentSeries],
   );
 
   const resetSeries = useCallback(() => {
+    if (!canEdit) return;
     archiveCurrentSeries();
     setSeriesStartDate(null);
     setOurSide(null);
@@ -439,28 +506,28 @@ export function useBpSimulator() {
     setSeriesPickedChampions([]);
     resetGame();
     showModal('已重置', `${formatSeriesLabel(seriesLength)} 系列賽已重置，Pick 禁用清單已清除。`);
-  }, [archiveCurrentSeries, resetGame, showModal, seriesLength]);
-
-  const autoOurSide = useMemo(
-    () => resolveOurSideFromTeamNames(teamNames, myTeamName),
-    [teamNames, myTeamName],
-  );
-  const ourSideAutoApplied = Boolean(autoOurSide && myTeamName.trim());
-
-  useEffect(() => {
-    if (!recordHydrated || seriesEnded || !autoOurSide) return;
-    setOurSide(autoOurSide);
-  }, [recordHydrated, autoOurSide, seriesEnded]);
+  }, [canEdit, archiveCurrentSeries, resetGame, showModal, seriesLength]);
 
   const toggleOurSide = useCallback(
     (side) => {
-      if (ourSideAutoApplied) return;
-      setOurSide((prev) => (prev === side ? null : side));
+      if (!canEdit) return;
+      setOurSide((prev) => {
+        const next = prev === side ? null : side;
+        if (next === side && myTeamName.trim()) {
+          const defaultName = side === 'Blue' ? '藍方' : '紅方';
+          setTeamNames((names) => {
+            if (names[side] !== defaultName) return names;
+            return { ...names, [side]: myTeamName.trim() };
+          });
+        }
+        return next;
+      });
     },
-    [ourSideAutoApplied],
+    [canEdit, myTeamName],
   );
 
   const startDraft = useCallback(() => {
+    if (!canEdit) return;
     if (bpState.currentStep > 0) return;
     if (championLoadStatus !== 'success') {
       showModal('請稍候', '英雄資料尚未載入完成。');
@@ -473,10 +540,11 @@ export function useBpSimulator() {
     setSeriesStartDate((prev) => prev || formatDateYmd());
     setBpState((prev) => ({ ...prev, currentStep: 1 }));
     setTeamInputsLocked(true);
-  }, [bpState.currentStep, championLoadStatus, seriesEnded, showModal]);
+  }, [canEdit, bpState.currentStep, championLoadStatus, seriesEnded, showModal]);
 
   const declareWinner = useCallback(
     (winningTeam) => {
+      if (!canEdit) return;
       if (bpState.currentStep <= DRAFT_FLOW.length) {
         showModal('尚未完成', '請完成全部 20 步 Ban/Pick 後再宣告勝利。');
         return;
@@ -534,10 +602,11 @@ export function useBpSimulator() {
       });
       setTeamInputsLocked(false);
     },
-    [bpState, currentGameNumber, seriesLength, ourSide, getTeamName, showModal, resetGame],
+    [canEdit, bpState, currentGameNumber, seriesLength, ourSide, getTeamName, showModal, resetGame],
   );
 
   const patchSeriesGame = useCallback((seriesId, gameNumber, patchFn) => {
+    if (!canEdit) return;
     if (seriesId === 'current') {
       setSeriesHistory((prev) =>
         prev.map((game) => (game.game === gameNumber ? patchFn(game) : game)),
@@ -557,7 +626,7 @@ export function useBpSimulator() {
             },
       ),
     );
-  }, []);
+  }, [canEdit]);
 
   const updateSeriesNote = useCallback(
     (seriesId, gameNumber, note) => {
@@ -740,7 +809,9 @@ export function useBpSimulator() {
     myTeamName,
     saveMyTeamName,
     updateMyTeamNameInput,
-    ourSideAutoApplied,
+    canEdit,
+    tryUnlockEdit,
+    lockEdit,
     currentSeriesScore,
     currentGameNumber,
     seriesLength,

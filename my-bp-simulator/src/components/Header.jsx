@@ -24,7 +24,7 @@ export default function Header() {
     ourSide,
     toggleOurSide,
     canChangeOurSide,
-    ourSideAutoApplied,
+    canEdit,
     teamsBarFlash,
   } = useBp();
 
@@ -40,7 +40,7 @@ export default function Header() {
                 type="checkbox"
                 className="accent-blue-500"
                 checked={ourSide === 'Blue'}
-                disabled={!canChangeOurSide || ourSideAutoApplied}
+                disabled={!canChangeOurSide || !canEdit}
                 onChange={() => toggleOurSide('Blue')}
               />
               我方
@@ -50,7 +50,7 @@ export default function Header() {
               maxLength={20}
               placeholder="藍方"
               value={teamNames.Blue}
-              disabled={teamInputsLocked}
+              disabled={teamInputsLocked || !canEdit}
               onFocus={() => updateTeamNameInput('Blue', '')}
               onChange={(e) => updateTeamNameInput('Blue', e.target.value)}
               onBlur={(e) => saveTeamName('Blue', e.target.value)}
@@ -59,7 +59,7 @@ export default function Header() {
           </div>
           <SeriesFormatSelect
             value={seriesLength}
-            disabled={seriesStarted}
+            disabled={seriesStarted || !canEdit}
             onChange={setSeriesLength}
           />
           <div className="flex items-center gap-2">
@@ -69,7 +69,7 @@ export default function Header() {
               maxLength={20}
               placeholder="紅方"
               value={teamNames.Red}
-              disabled={teamInputsLocked}
+              disabled={teamInputsLocked || !canEdit}
               onFocus={() => updateTeamNameInput('Red', '')}
               onChange={(e) => updateTeamNameInput('Red', e.target.value)}
               onBlur={(e) => saveTeamName('Red', e.target.value)}
@@ -79,7 +79,7 @@ export default function Header() {
                 type="checkbox"
                 className="accent-red-500"
                 checked={ourSide === 'Red'}
-                disabled={!canChangeOurSide || ourSideAutoApplied}
+                disabled={!canChangeOurSide || !canEdit}
                 onChange={() => toggleOurSide('Red')}
               />
               我方
@@ -105,7 +105,7 @@ export default function Header() {
           <button
             type="button"
             className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
-            disabled={startButtonState.disabled}
+            disabled={startButtonState.disabled || !canEdit}
             onClick={startDraft}
           >
             {startButtonState.text}
@@ -113,15 +113,16 @@ export default function Header() {
           <button
             type="button"
             className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
-            disabled={resetGameButtonDisabled}
+            disabled={resetGameButtonDisabled || !canEdit}
             onClick={resetCurrentGame}
           >
             重置本局
           </button>
           <button
             type="button"
-            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold transition"
-            onClick={resetSeries}
+            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={canEdit ? resetSeries : undefined}
+            disabled={!canEdit}
           >
             重置系列賽
           </button>

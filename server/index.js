@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ensureDb, getRecord, initDb, saveRecord } from './db.js';
+import { ensureDb, getRecordWithMeta, initDb, saveRecord } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '../my-bp-simulator/dist');
@@ -19,8 +19,11 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/record', async (_req, res) => {
   try {
-    const data = await getRecord();
-    res.json(data);
+    const meta = await getRecordWithMeta();
+    res.json({
+      record: meta?.data ?? null,
+      updatedAt: meta?.updatedAt ?? null,
+    });
   } catch (err) {
     console.error('[api] GET /api/record', err);
     res.status(500).json({ error: 'Failed to load record' });
@@ -33,8 +36,8 @@ app.put('/api/record', async (req, res) => {
       res.status(400).json({ error: 'Invalid payload' });
       return;
     }
-    await saveRecord(req.body);
-    res.json({ ok: true });
+    const updatedAt = await saveRecord(req.body);
+    res.json({ ok: true, updatedAt });
   } catch (err) {
     console.error('[api] PUT /api/record', err);
     res.status(500).json({ error: 'Failed to save record' });

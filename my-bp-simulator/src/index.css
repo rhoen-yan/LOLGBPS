@@ -446,6 +446,42 @@ body {
 .history-item { border-left: 3px solid var(--border); }
 .history-item.winner-blue { border-left-color: var(--blue); }
 .history-item.winner-red { border-left-color: var(--red); }
+.password-gate {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+}
+.password-gate-input {
+  width: 7rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: #1a1d24;
+  color: #e5e7eb;
+  font-size: 0.8125rem;
+}
+.password-gate-input.is-error {
+  border-color: #f87171;
+}
+.password-gate-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: #1a1d24;
+  color: #9ca3af;
+}
+.password-gate-lock:hover {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+.password-gate.is-unlocked .password-gate-lock {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
+}
 .history-series-summary {
   display: flex;
   align-items: center;
@@ -525,7 +561,7 @@ body {
   align-items: center;
   vertical-align: middle;
   line-height: 1;
-  margin: 0 2px;
+  margin: 0 4px;
   user-select: all;
   cursor: default;
 }
