@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useBp } from '../context/BpContext';
 import ChampionMentionField from './ChampionMentionField';
 import ChampionMentionDisplay from './ChampionMentionDisplay';
@@ -426,6 +426,47 @@ function SeriesRemoveButton({ onClick }) {
   );
 }
 
+function SeriesDateButton({ value, onChange }) {
+  const inputRef = useRef(null);
+  const normalizedValue = value === '未知' ? '' : value || '';
+
+  const openPicker = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = inputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') input.showPicker();
+    else input.click();
+  };
+
+  return (
+    <span className="series-date-control">
+      <button
+        type="button"
+        className="series-date-btn"
+        title="修改日期"
+        aria-label="修改日期"
+        onClick={openPicker}
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M8 2v4M16 2v4M3 10h18" />
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+        </svg>
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        className="series-date-input"
+        value={normalizedValue}
+        tabIndex={-1}
+        aria-hidden="true"
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </span>
+  );
+}
+
 function SeriesGroup({
   series,
   champions,
@@ -464,19 +505,6 @@ function SeriesGroup({
       <summary className="history-series-summary cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-lg">
         <span className="history-series-summary-content">
           <span className="mr-2">{formatSeriesLabel(series.seriesLength, series.seriesMode)}</span>
-          {canEdit && (
-            <input
-              type="date"
-              className="mr-2 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200"
-              value={series.startDate === '未知' ? '' : series.startDate || ''}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onChange={(e) => updateSeriesDate(series.id, e.target.value)}
-            />
-          )}
           <span className="text-gray-300">{teamA}</span>
           <span className="text-gray-500 mx-1.5">vs</span>
           <span className="text-gray-300">{teamB}</span>
@@ -504,7 +532,15 @@ function SeriesGroup({
             </span>
           )}
         </span>
-        {canEdit && <SeriesRemoveButton onClick={() => requestRemoveSeries(series)} />}
+        {canEdit && (
+          <span className="series-summary-actions">
+            <SeriesDateButton
+              value={series.startDate}
+              onChange={(date) => updateSeriesDate(series.id, date)}
+            />
+            <SeriesRemoveButton onClick={() => requestRemoveSeries(series)} />
+          </span>
+        )}
       </summary>
       <div className="px-2 pb-3 pt-1 space-y-3">
         {filteredGames.map((r) => (

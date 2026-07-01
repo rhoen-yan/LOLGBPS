@@ -507,6 +507,17 @@ body {
   flex: 1;
   min-width: 0;
 }
+.series-summary-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.series-date-control {
+  position: relative;
+  display: inline-flex;
+}
+.series-date-btn,
 .series-remove-btn {
   flex-shrink: 0;
   display: inline-flex;
@@ -517,9 +528,20 @@ body {
   color: #9ca3af;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
+.series-date-btn:hover {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+}
 .series-remove-btn:hover {
   color: #f87171;
   background: rgba(248, 113, 113, 0.12);
+}
+.series-date-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 .history-date-group > summary,
 .history-series-group > summary {
