@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useBp } from '../context/BpContext';
-import { DRAFT_FLOW, slotId } from '../constants';
+import { DRAFT_FLOW, EMPTY_BAN_CHAMPION, isEmptyBanId, slotId } from '../constants';
 
 function DraftSlot({ team, type, index }) {
   const {
@@ -25,7 +25,7 @@ function DraftSlot({ team, type, index }) {
   const isDragOver = dragOverSlotId === id;
   const isDragging = draggingSlotId === id;
 
-  const champ = champions.find((c) => c.id === champId);
+  const champ = isEmptyBanId(champId) ? EMPTY_BAN_CHAMPION : champions.find((c) => c.id === champId);
   const name = champ?.name || champId;
 
   const classNames = [
@@ -58,10 +58,10 @@ function DraftSlot({ team, type, index }) {
             alt={name}
             className="w-full h-full object-cover pointer-events-none"
             onError={(e) => {
-              e.currentTarget.src = 'https://placehold.co/72x72/333/fff?text=?';
+              if (!isEmptyBanId(champId)) e.currentTarget.src = 'https://placehold.co/72x72/333/fff?text=?';
             }}
           />
-          {isBan && <div className="ban-x">×</div>}
+          {isBan && !isEmptyBanId(champId) && <div className="ban-x">×</div>}
         </>
       ) : (
         !isBan && <span className="slot-num">{index}</span>
@@ -226,7 +226,8 @@ function ChampionGrid() {
         )}
         {championLoadStatus === 'success' &&
           filteredChampions.map((c) => {
-            const isUnavailable = unavailableIds.has(c.id);
+            const isEmptyBan = isEmptyBanId(c.id);
+            const isUnavailable = !isEmptyBan && unavailableIds.has(c.id);
             const isSeriesBanned = seriesPickedChampions.includes(c.id);
             const disabledClick = isUnavailable || !canClickSelect;
             const disabledDrag = isUnavailable || !canDragFromGrid;
@@ -238,6 +239,7 @@ function ChampionGrid() {
                 type="button"
                 className={[
                   'champ-card relative overflow-hidden p-1',
+                  isEmptyBan ? 'empty-ban-card' : '',
                   disabledClick && disabledDrag ? 'disabled' : 'draggable-champ',
                   isSeriesBanned ? 'series-banned' : '',
                   isDragging ? 'dragging' : '',
@@ -254,7 +256,7 @@ function ChampionGrid() {
                   alt={c.name}
                   className="w-full aspect-square object-cover rounded"
                   onError={(e) => {
-                    e.currentTarget.src = 'https://placehold.co/64x64/333/fff?text=?';
+                    if (!isEmptyBan) e.currentTarget.src = 'https://placehold.co/64x64/333/fff?text=?';
                   }}
                 />
                 <p className="text-[10px] text-center mt-1 truncate px-0.5">{c.name}</p>

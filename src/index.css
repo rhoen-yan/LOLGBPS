@@ -327,6 +327,13 @@ body {
 }
 .champ-card.disabled { opacity: 0.35; pointer-events: none; }
 .champ-card.series-banned { opacity: 0.5; pointer-events: none; border-color: var(--red); }
+.champ-card.empty-ban-card {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: #0b1620;
+}
+.champ-card.empty-ban-card img {
+  background: #020b12;
+}
 .series-tag {
   position: absolute;
   inset: 0;
@@ -435,6 +442,13 @@ body {
   text-align: center;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+}
+.series-format-group-label {
+  padding: 7px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
 }
 .series-format-option:hover {
   background: #252932;

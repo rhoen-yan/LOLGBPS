@@ -1,3 +1,5 @@
+import { isEmptyBanId } from '../constants';
+
 export function findChampionMentionAt(text, startIndex, champions) {
   let best = null;
   for (const champ of champions) {
@@ -180,7 +182,7 @@ export function collectGameChampionIds(record) {
     ...(record.redBans || []),
     ...(record.bluePicks || []),
     ...(record.redPicks || []),
-  ];
+  ].filter((id) => !isEmptyBanId(id));
 }
 
 export function createSeriesEventId() {

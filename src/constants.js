@@ -3,13 +3,36 @@ export const STORAGE_RED = 'bp-red-team-name';
 export const EDIT_PASSWORD = 'ssheep';
 export const DEFAULT_DDRAGON_VERSION = '14.19.1';
 export const SERIES_LENGTH_OPTIONS = [1, 2, 3, 4, 5];
+export const SERIES_MODE_OPTIONS = ['bo', 'games'];
+export const BO_SERIES_LENGTH_OPTIONS = [3, 5];
+export const GAME_COUNT_OPTIONS = [1, 2, 3, 4, 5];
+export const EMPTY_BAN_ID = '__empty_ban__';
+export const EMPTY_BAN_CHAMPION = {
+  id: EMPTY_BAN_ID,
+  name: '空 BAN',
+  icon: '/icons/empty-ban.png',
+};
+
+export function isEmptyBanId(id) {
+  return id === EMPTY_BAN_ID;
+}
+
+export function normalizeSeriesMode(mode) {
+  return mode === 'games' ? 'games' : 'bo';
+}
+
+export function normalizeSeriesLength(seriesLength, mode = 'bo') {
+  const n = Number(seriesLength);
+  const options = normalizeSeriesMode(mode) === 'bo' ? BO_SERIES_LENGTH_OPTIONS : GAME_COUNT_OPTIONS;
+  return options.includes(n) ? n : options[options.length - 1];
+}
 
 export function getWinsToWin(seriesLength) {
   return Math.floor(seriesLength / 2) + 1;
 }
 
-export function formatSeriesLabel(seriesLength) {
-  return `BO${seriesLength}`;
+export function formatSeriesLabel(seriesLength, mode = 'bo') {
+  return normalizeSeriesMode(mode) === 'games' ? `${seriesLength} 場` : `BO${seriesLength}`;
 }
 
 export const DRAFT_FLOW = [

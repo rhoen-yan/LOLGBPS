@@ -1,4 +1,4 @@
-import { SERIES_LENGTH_OPTIONS, getWinsToWin, createEmptyBpState } from '../constants';
+import { createEmptyBpState, getWinsToWin, normalizeSeriesLength, normalizeSeriesMode } from '../constants';
 import { createSeriesEventId } from './championMention';
 import { normalizePickLanes } from './pickLanes';
 
@@ -96,7 +96,8 @@ function normalizeArchivedSeries(entry) {
   return {
     id: typeof entry.id === 'string' ? entry.id : createSeriesId(),
     startDate: typeof entry.startDate === 'string' ? entry.startDate : formatDateYmd(),
-    seriesLength: SERIES_LENGTH_OPTIONS.includes(entry.seriesLength) ? entry.seriesLength : 5,
+    seriesMode: normalizeSeriesMode(entry.seriesMode),
+    seriesLength: normalizeSeriesLength(entry.seriesLength, entry.seriesMode),
     teamNames: normalizeTeamNames(entry.teamNames),
     finalScore: normalizeScore(entry.finalScore),
     games,
@@ -136,12 +137,14 @@ function normalizeCurrentSeries(data) {
   const seriesHistory = Array.isArray(data?.seriesHistory)
     ? data.seriesHistory.map((g) => normalizeHistoryEntry(g, legacyOurSide)).filter(Boolean)
     : [];
-  const seriesLength = SERIES_LENGTH_OPTIONS.includes(data?.seriesLength) ? data.seriesLength : 5;
+  const seriesMode = normalizeSeriesMode(data?.seriesMode);
+  const seriesLength = normalizeSeriesLength(data?.seriesLength, seriesMode);
   const gameNumber = Number(data?.currentGameNumber);
 
   return {
     startDate: typeof data?.startDate === 'string' ? data.startDate : null,
     ourSide: normalizeOurSide(data?.ourSide),
+    seriesMode,
     seriesLength,
     currentSeriesScore: normalizeScore(data?.currentSeriesScore),
     currentGameNumber: Number.isFinite(gameNumber) && gameNumber >= 1 ? gameNumber : 1,
@@ -217,6 +220,7 @@ export function clearSeriesRecord() {
 
 export function buildArchivedSeriesSnapshot({
   startDate,
+  seriesMode,
   seriesLength,
   teamNames,
   currentSeriesScore,
@@ -228,6 +232,7 @@ export function buildArchivedSeriesSnapshot({
   return normalizeArchivedSeries({
     id: createSeriesId(),
     startDate: startDate || formatDateYmd(),
+    seriesMode,
     seriesLength,
     teamNames,
     finalScore: currentSeriesScore,
@@ -314,6 +319,9 @@ export function computeScoreFromGames(games) {
 }
 
 export function getClinchingGame(series) {
+  if (normalizeSeriesMode(series.seriesMode) === 'games') {
+    return (series.games ?? [])[Math.min((series.games?.length ?? 0), series.seriesLength ?? 5) - 1] ?? null;
+  }
   const needed = getWinsToWin(series.seriesLength ?? 5);
   const [teamA, teamB] = getSeriesMatchupNames(series);
   let scoreA = 0;
@@ -330,12 +338,24 @@ export function getClinchingGame(series) {
 
 export function getOurSeriesResult(series) {
   if (!isSeriesDecided(series)) return null;
+  if (normalizeSeriesMode(series.seriesMode) === 'games') {
+    const { teamA, teamB, scoreA, scoreB } = computeTeamSeriesScore(series);
+    if (scoreA === scoreB) return null;
+    const winnerName = scoreA > scoreB ? teamA : teamB;
+    const clinch = getClinchingGame(series);
+    if (!clinch?.ourSide) return null;
+    const ourName = getGameTeamName(clinch, series, clinch.ourSide);
+    return winnerName === ourName ? 'win' : 'loss';
+  }
   const clinch = getClinchingGame(series);
   if (!clinch?.ourSide) return null;
   return clinch.winner === clinch.ourSide ? 'win' : 'loss';
 }
 
 export function isSeriesDecided(series) {
+  if (normalizeSeriesMode(series.seriesMode) === 'games') {
+    return (series.games ?? []).filter((game) => game.winner).length >= (series.seriesLength ?? 5);
+  }
   const needed = getWinsToWin(series.seriesLength ?? 5);
   const { scoreA, scoreB } = computeTeamSeriesScore(series);
   return scoreA >= needed || scoreB >= needed;

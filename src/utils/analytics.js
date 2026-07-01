@@ -1,4 +1,5 @@
 import { LANES } from '../constants/lanes';
+import { isEmptyBanId } from '../constants';
 import { isGameLaneComplete } from './pickLanes';
 import { getGameTeamNames } from './seriesStorage';
 
@@ -231,7 +232,7 @@ function aggregateChampionStats(items, trackWins = true) {
 
   for (const { bans, picksWithLanes, won } of items) {
     for (const id of bans) {
-      if (!id) continue;
+      if (!id || isEmptyBanId(id)) continue;
       const entry = champMap.get(id) ?? { id, picks: 0, wins: 0, bans: 0 };
       entry.bans += 1;
       champMap.set(id, entry);
@@ -452,7 +453,7 @@ export function computeOurBanRoleStats(contexts, myTeamName = '') {
   for (const { bans } of items) {
     const lanesThisGame = new Set();
     for (const id of bans) {
-      if (!id) continue;
+      if (!id || isEmptyBanId(id)) continue;
       const lane = resolvePrimaryLane(id, champLaneCounts);
       if (!lane) continue;
       lanesThisGame.add(lane);
@@ -626,7 +627,7 @@ export function computeBanMatchupAnalytics(contexts, myTeamName = '', target = '
         : getSideBansPicks(game, enemySide).bans;
 
     for (const id of bans) {
-      if (!id) continue;
+      if (!id || isEmptyBanId(id)) continue;
       const entry = map.get(id) ?? { id, games: 0, wins: 0 };
       entry.games += 1;
       if (won) entry.wins += 1;

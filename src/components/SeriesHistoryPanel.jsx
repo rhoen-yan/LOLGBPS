@@ -3,7 +3,7 @@ import { useBp } from '../context/BpContext';
 import ChampionMentionField from './ChampionMentionField';
 import ChampionMentionDisplay from './ChampionMentionDisplay';
 import GameTimelineEvents from './GameTimelineEvents';
-import { formatSeriesLabel } from '../constants';
+import { EMPTY_BAN_CHAMPION, formatSeriesLabel, isEmptyBanId } from '../constants';
 import { LANES, getLaneById } from '../constants/lanes';
 import { collectGameChampionIds, getGameChampionsFromIds } from '../utils/championMention';
 import { isGameLaneComplete, seriesHasIncompleteLanes } from '../utils/pickLanes';
@@ -72,17 +72,17 @@ function ChampBanRow({ ids, champions, getChampionIconUrl }) {
     return <span className="text-xs text-gray-600">—</span>;
   }
 
-  return ids.map((id) => {
-    const champ = champions.find((c) => c.id === id);
+  return ids.map((id, index) => {
+    const champ = isEmptyBanId(id) ? EMPTY_BAN_CHAMPION : champions.find((c) => c.id === id);
     const name = champ?.name || id;
     return (
-      <div key={id} className="flex flex-col items-center w-12 history-champ-ban">
+      <div key={`${id}-${index}`} className="flex flex-col items-center w-12 history-champ-ban">
         <img
           src={getChampionIconUrl(id)}
           alt={name}
           className="w-10 h-10 rounded object-cover border border-gray-700"
           onError={(e) => {
-            e.currentTarget.src = 'https://placehold.co/40x40/333/fff?text=?';
+            if (!isEmptyBanId(id)) e.currentTarget.src = 'https://placehold.co/40x40/333/fff?text=?';
           }}
         />
         <span className="text-[10px] text-gray-400 mt-1 truncate w-full text-center">{name}</span>
@@ -431,6 +431,7 @@ function SeriesGroup({
   champions,
   getChampionIconUrl,
   updateSeriesNote,
+  updateSeriesDate,
   updateGamePickLane,
   updateGameWinner,
   updateGameOurSide,
@@ -462,7 +463,20 @@ function SeriesGroup({
     >
       <summary className="history-series-summary cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-800/50 rounded-lg">
         <span className="history-series-summary-content">
-          <span className="mr-2">{formatSeriesLabel(series.seriesLength)}</span>
+          <span className="mr-2">{formatSeriesLabel(series.seriesLength, series.seriesMode)}</span>
+          {canEdit && (
+            <input
+              type="date"
+              className="mr-2 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200"
+              value={series.startDate === '未知' ? '' : series.startDate || ''}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onChange={(e) => updateSeriesDate(series.id, e.target.value)}
+            />
+          )}
           <span className="text-gray-300">{teamA}</span>
           <span className="text-gray-500 mx-1.5">vs</span>
           <span className="text-gray-300">{teamB}</span>
@@ -522,10 +536,12 @@ export default function SeriesHistoryPanel() {
     seriesHistory,
     seriesStartDate,
     teamNames,
+    seriesMode,
     seriesLength,
     champions,
     getChampionIconUrl,
     updateSeriesNote,
+    updateSeriesDate,
     updateGamePickLane,
     updateGameWinner,
     updateGameOurSide,
@@ -554,6 +570,7 @@ export default function SeriesHistoryPanel() {
         id: 'current',
         startDate: seriesStartDate || '未知',
         seriesLength,
+        seriesMode,
         teamNames: { ...teamNames },
         games: seriesHistory,
         isCurrent: true,
@@ -564,6 +581,7 @@ export default function SeriesHistoryPanel() {
     archivedSeries,
     seriesHistory,
     seriesStartDate,
+    seriesMode,
     seriesLength,
     teamNames,
   ]);
@@ -683,6 +701,7 @@ export default function SeriesHistoryPanel() {
                     champions={champions}
                     getChampionIconUrl={getChampionIconUrl}
                     updateSeriesNote={updateSeriesNote}
+                    updateSeriesDate={updateSeriesDate}
                     updateGamePickLane={updateGamePickLane}
                     updateGameWinner={updateGameWinner}
                     updateGameOurSide={updateGameOurSide}

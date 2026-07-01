@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatSeriesLabel, SERIES_LENGTH_OPTIONS } from '../constants';
+import {
+  BO_SERIES_LENGTH_OPTIONS,
+  GAME_COUNT_OPTIONS,
+  formatSeriesLabel,
+  normalizeSeriesLength,
+  normalizeSeriesMode,
+} from '../constants';
 
-export default function SeriesFormatSelect({ value, disabled, onChange }) {
+export default function SeriesFormatSelect({ mode, value, disabled, onChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const normalizedMode = normalizeSeriesMode(mode);
 
   useEffect(() => {
     if (!open) return;
@@ -16,8 +23,8 @@ export default function SeriesFormatSelect({ value, disabled, onChange }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  const handleSelect = (n) => {
-    onChange(n);
+  const handleSelect = (nextMode, nextValue) => {
+    onChange(nextMode, normalizeSeriesLength(nextValue, nextMode));
     setOpen(false);
   };
 
@@ -32,18 +39,31 @@ export default function SeriesFormatSelect({ value, disabled, onChange }) {
         aria-expanded={open}
         onClick={() => !disabled && setOpen((v) => !v)}
       >
-        {formatSeriesLabel(value)}
+        {formatSeriesLabel(value, normalizedMode)}
       </button>
       {open && (
         <ul className="series-format-menu custom-scroll" role="listbox">
-          {SERIES_LENGTH_OPTIONS.map((n) => (
-            <li key={n} role="option" aria-selected={n === value}>
+          <li className="series-format-group-label">BO</li>
+          {BO_SERIES_LENGTH_OPTIONS.map((n) => (
+            <li key={`bo-${n}`} role="option" aria-selected={normalizedMode === 'bo' && n === value}>
               <button
                 type="button"
-                className={`series-format-option${n === value ? ' is-active' : ''}`}
-                onClick={() => handleSelect(n)}
+                className={`series-format-option${normalizedMode === 'bo' && n === value ? ' is-active' : ''}`}
+                onClick={() => handleSelect('bo', n)}
               >
-                {formatSeriesLabel(n)}
+                {formatSeriesLabel(n, 'bo')}
+              </button>
+            </li>
+          ))}
+          <li className="series-format-group-label">場數</li>
+          {GAME_COUNT_OPTIONS.map((n) => (
+            <li key={`games-${n}`} role="option" aria-selected={normalizedMode === 'games' && n === value}>
+              <button
+                type="button"
+                className={`series-format-option${normalizedMode === 'games' && n === value ? ' is-active' : ''}`}
+                onClick={() => handleSelect('games', n)}
+              >
+                {formatSeriesLabel(n, 'games')}
               </button>
             </li>
           ))}

@@ -18,9 +18,10 @@ export default function Header() {
     resetCurrentGame,
     resetSeries,
     declareWinner,
+    seriesMode,
     seriesLength,
     seriesStarted,
-    setSeriesLength,
+    updateSeriesFormat,
     ourSide,
     toggleOurSide,
     canChangeOurSide,
@@ -60,9 +61,10 @@ export default function Header() {
           </div>
           <div className="flex flex-col items-center gap-0.5 min-w-[5rem]">
             <SeriesFormatSelect
+              mode={seriesMode}
               value={seriesLength}
               disabled={seriesStarted || !canEdit}
-              onChange={setSeriesLength}
+              onChange={updateSeriesFormat}
             />
             {seriesStarted && (
               <p className="text-xs tabular-nums text-gray-400 whitespace-nowrap">

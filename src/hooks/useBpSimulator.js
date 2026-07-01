@@ -4,9 +4,13 @@ import {
   DEFAULT_DDRAGON_VERSION,
   DRAFT_FLOW,
   EDIT_PASSWORD,
+  EMPTY_BAN_CHAMPION,
   formatSeriesLabel,
   getTeamArray,
   getWinsToWin,
+  isEmptyBanId,
+  normalizeSeriesLength,
+  normalizeSeriesMode,
 } from '../constants';
 import { fetchChampionRoster } from '../utils/championRoster';
 import { createSeriesEventId } from '../utils/championMention';
@@ -26,7 +30,6 @@ import {
   computeTeamSeriesScore,
   formatDateYmd,
   getSeriesMatchupNames,
-  getWinningTeamName,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -78,6 +81,7 @@ export function useBpSimulator() {
   const [ourSide, setOurSide] = useState(null);
   const [currentSeriesScore, setCurrentSeriesScore] = useState({ Blue: 0, Red: 0 });
   const [currentGameNumber, setCurrentGameNumber] = useState(1);
+  const [seriesMode, setSeriesMode] = useState('bo');
   const [seriesLength, setSeriesLength] = useState(5);
   const [seriesHistory, setSeriesHistory] = useState([]);
   const [seriesPickedChampions, setSeriesPickedChampions] = useState([]);
@@ -127,7 +131,8 @@ export function useBpSimulator() {
     setOurSide(savedCurrent.ourSide ?? null);
     setCurrentSeriesScore(savedCurrent.currentSeriesScore ?? { Blue: 0, Red: 0 });
     setCurrentGameNumber(savedCurrent.currentGameNumber ?? 1);
-    setSeriesLength(savedCurrent.seriesLength ?? 5);
+    setSeriesMode(normalizeSeriesMode(savedCurrent.seriesMode));
+    setSeriesLength(normalizeSeriesLength(savedCurrent.seriesLength, savedCurrent.seriesMode));
     setSeriesHistory(savedCurrent.seriesHistory ?? []);
     setSeriesPickedChampions(savedCurrent.seriesPickedChampions ?? []);
     if (savedCurrent.bpState) setBpState(savedCurrent.bpState);
@@ -135,7 +140,10 @@ export function useBpSimulator() {
   }, []);
 
   const getChampionIconUrl = useCallback(
-    (id) => `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`,
+    (id) =>
+      isEmptyBanId(id)
+        ? EMPTY_BAN_CHAMPION.icon
+        : `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`,
     [ddragonVersion],
   );
 
@@ -235,6 +243,7 @@ export function useBpSimulator() {
       current: {
         startDate: seriesStartDate,
         ourSide,
+        seriesMode,
         seriesLength,
         currentSeriesScore,
         currentGameNumber,
@@ -259,6 +268,7 @@ export function useBpSimulator() {
     seriesHistory,
     currentSeriesScore,
     currentGameNumber,
+    seriesMode,
     seriesLength,
     seriesPickedChampions,
     bpState,
@@ -334,7 +344,9 @@ export function useBpSimulator() {
     [bpState.currentStep, seriesHistory.length],
   );
   const seriesEnded =
-    teamSeriesScore.scoreA >= winsToWin || teamSeriesScore.scoreB >= winsToWin;
+    seriesMode === 'games'
+      ? seriesHistory.filter((game) => game.winner).length >= seriesLength
+      : teamSeriesScore.scoreA >= winsToWin || teamSeriesScore.scoreB >= winsToWin;
 
   const canEditSlots = useCallback(() => {
     if (!canEdit) return false;
@@ -373,6 +385,7 @@ export function useBpSimulator() {
 
   const isChampionUsedElsewhere = useCallback(
     (championId, exceptSlot = null) => {
+      if (isEmptyBanId(championId)) return false;
       for (const side of ['Blue', 'Red']) {
         for (const kind of ['bans', 'picks']) {
           const arr = getTeamArray(bpState.teamData, side, kind);
@@ -396,7 +409,10 @@ export function useBpSimulator() {
   );
 
   const validateChampionForAssignment = useCallback(
-    (championId, exceptSlot = null) => {
+    (championId, exceptSlot = null, targetType = null) => {
+      if (isEmptyBanId(championId)) {
+        return targetType === 'bans';
+      }
       if (seriesPickedChampions.includes(championId)) {
         const name = champions.find((c) => c.id === championId)?.name || championId;
         showModal('系列賽禁用', `${name} 已在先前局數被 Pick，本系列賽不可再選。`);
@@ -424,15 +440,19 @@ export function useBpSimulator() {
       if (bpState.selectedChampions.includes(championId)) return;
 
       const action = DRAFT_FLOW[bpState.currentStep - 1];
+      if (isEmptyBanId(championId) && action.type !== 'Ban') return;
       setBpState((prev) => {
         const next = structuredClone(prev);
-        next.selectedChampions = [...next.selectedChampions, championId];
         if (action.type === 'Ban') {
           next.teamData[action.team].bans.push(championId);
           next.banCounts[action.team]++;
         } else {
+          next.selectedChampions = [...next.selectedChampions, championId];
           next.teamData[action.team].picks.push(championId);
           next.pickCounts[action.team]++;
+        }
+        if (action.type === 'Ban' && !isEmptyBanId(championId)) {
+          next.selectedChampions = [...next.selectedChampions, championId];
         }
         next.currentStep++;
         return next;
@@ -448,7 +468,7 @@ export function useBpSimulator() {
       const isReplace = index <= count;
       const exceptSlot = isReplace ? { team, type, index } : null;
 
-      if (!validateChampionForAssignment(championId, exceptSlot)) return;
+      if (!validateChampionForAssignment(championId, exceptSlot, type)) return;
 
       if (isReplace) {
         const oldId = arr[index - 1];
@@ -458,7 +478,7 @@ export function useBpSimulator() {
           const list = getTeamArray(next.teamData, team, type);
           list[index - 1] = championId;
           next.selectedChampions = next.selectedChampions.filter((id) => id !== oldId);
-          next.selectedChampions.push(championId);
+          if (!isEmptyBanId(championId)) next.selectedChampions.push(championId);
           return next;
         });
       } else if (isActiveSlot(team, type, index) && index === count + 1) {
@@ -477,6 +497,8 @@ export function useBpSimulator() {
       const sourceId = sourceArr[source.index - 1];
       const targetId = targetArr[target.index - 1];
       if (!sourceId || !targetId || sourceId === targetId) return prev;
+      if (isEmptyBanId(sourceId) && target.type !== 'bans') return prev;
+      if (isEmptyBanId(targetId) && source.type !== 'bans') return prev;
 
       const next = structuredClone(prev);
       getTeamArray(next.teamData, source.team, source.type)[source.index - 1] = targetId;
@@ -511,6 +533,16 @@ export function useBpSimulator() {
     setSearch('');
     setTeamInputsLocked(false);
   }, []);
+
+  const updateSeriesFormat = useCallback(
+    (nextMode, nextLength) => {
+      if (!canEdit || seriesStarted) return;
+      const normalizedMode = normalizeSeriesMode(nextMode);
+      setSeriesMode(normalizedMode);
+      setSeriesLength(normalizeSeriesLength(nextLength, normalizedMode));
+    },
+    [canEdit, seriesStarted],
+  );
 
   const syncPendingGameRecord = useCallback(() => {
     if (!canEdit) return;
@@ -572,6 +604,7 @@ export function useBpSimulator() {
   const archiveCurrentSeries = useCallback(() => {
     const snapshot = buildArchivedSeriesSnapshot({
       startDate: seriesStartDate,
+      seriesMode,
       seriesLength,
       teamNames,
       currentSeriesScore,
@@ -580,7 +613,7 @@ export function useBpSimulator() {
     if (snapshot) {
       setArchivedSeries((prev) => [...prev, snapshot]);
     }
-  }, [seriesStartDate, seriesLength, teamNames, currentSeriesScore, seriesHistory]);
+  }, [seriesStartDate, seriesMode, seriesLength, teamNames, currentSeriesScore, seriesHistory]);
 
   const clearCurrentSeries = useCallback(() => {
     setSeriesStartDate(null);
@@ -600,7 +633,7 @@ export function useBpSimulator() {
       const [teamA, teamB] = getSeriesMatchupNames(series);
       showConfirmModal(
         '確認移除系列賽',
-        `確定要移除 ${formatSeriesLabel(series.seriesLength)} ${teamA} vs ${teamB}？此操作無法復原。`,
+        `確定要移除 ${formatSeriesLabel(series.seriesLength, series.seriesMode)} ${teamA} vs ${teamB}？此操作無法復原。`,
         () => {
           if (series.id === 'current') {
             clearCurrentSeries();
@@ -625,8 +658,8 @@ export function useBpSimulator() {
     setSeriesHistory([]);
     setSeriesPickedChampions([]);
     resetGame();
-    showModal('已重置', `${formatSeriesLabel(seriesLength)} 系列賽已重置，Pick 禁用清單已清除。`);
-  }, [canEdit, archiveCurrentSeries, resetGame, showModal, seriesLength, myTeamName]);
+    showModal('已重置', `${formatSeriesLabel(seriesLength, seriesMode)} 系列賽已重置，Pick 禁用清單已清除。`);
+  }, [canEdit, archiveCurrentSeries, resetGame, showModal, seriesMode, seriesLength, myTeamName]);
 
   const toggleOurSide = useCallback(
     (side) => {
@@ -720,15 +753,23 @@ export function useBpSimulator() {
           games: next,
         });
         const needed = getWinsToWin(seriesLength);
-        const winnerName = getWinningTeamName(finalized, { teamNames, games: next });
+        const gamesPlayed = next.filter((game) => game.winner).length;
+        const fixedCountComplete = seriesMode === 'games' && gamesPlayed >= seriesLength;
+        const boComplete = seriesMode === 'bo' && (scoreA >= needed || scoreB >= needed);
 
-        if (scoreA < needed && scoreB < needed) {
+        if (!fixedCountComplete && !boComplete) {
           setCurrentGameNumber((g) => g + 1);
           resetGame();
         } else {
-          const wScore = winnerName === teamA ? scoreA : scoreB;
-          const lScore = winnerName === teamA ? scoreB : scoreA;
-          showModal('系列賽結束', `${winnerName} 以 ${wScore}:${lScore} 贏得系列賽`);
+          const finalWinnerName = scoreA === scoreB ? null : scoreA > scoreB ? teamA : teamB;
+          const wScore = finalWinnerName === teamA ? scoreA : scoreB;
+          const lScore = finalWinnerName === teamA ? scoreB : scoreA;
+          showModal(
+            '系列賽結束',
+            finalWinnerName
+              ? `${finalWinnerName} 以 ${wScore}:${lScore} 贏下系列賽。`
+              : `系列賽以 ${scoreA}:${scoreB} 平手結束。`,
+          );
         }
 
         return next;
@@ -737,7 +778,7 @@ export function useBpSimulator() {
       setOurSide(null);
       setTeamInputsLocked(false);
     },
-    [canEdit, bpState, currentGameNumber, seriesLength, ourSide, teamNames, getTeamName, showModal, resetGame],
+    [canEdit, bpState, currentGameNumber, seriesMode, seriesLength, ourSide, teamNames, getTeamName, showModal, resetGame],
   );
 
   const patchSeriesGame = useCallback((seriesId, gameNumber, patchFn) => {
@@ -763,6 +804,23 @@ export function useBpSimulator() {
     );
   }, [canEdit]);
 
+  const updateSeriesDate = useCallback(
+    (seriesId, startDate) => {
+      if (!canEdit) return;
+      const normalized = startDate || formatDateYmd();
+      if (seriesId === 'current') {
+        setSeriesStartDate(normalized);
+        return;
+      }
+      setArchivedSeries((prev) =>
+        prev.map((series) =>
+          series.id === seriesId ? { ...series, startDate: normalized } : series,
+        ),
+      );
+    },
+    [canEdit],
+  );
+
   const updateSeriesNote = useCallback(
     (seriesId, gameNumber, note) => {
       patchSeriesGame(seriesId, gameNumber, (game) => ({ ...game, note }));
@@ -776,7 +834,7 @@ export function useBpSimulator() {
 
       patchSeriesGame(seriesId, gameNumber, (game) => {
         const lanes = [...(game[laneKey] ?? emptyPickLanes())];
-        lanes[pickIndex] = laneId;
+        lanes[pickIndex] = lanes[pickIndex] === laneId ? null : laneId;
         return { ...game, [laneKey]: lanes };
       });
     },
@@ -978,15 +1036,26 @@ export function useBpSimulator() {
 
   const filteredChampions = useMemo(() => {
     const q = search.toLocaleLowerCase('zh-Hant');
+    const currentAction =
+      bpState.currentStep > 0 && bpState.currentStep <= DRAFT_FLOW.length
+        ? DRAFT_FLOW[bpState.currentStep - 1]
+        : null;
+    const showEmptyBan = currentAction?.type === 'Ban';
     const filtered = champions.filter((c) => {
       if (!q) return true;
       return c.name.toLocaleLowerCase('zh-Hant').includes(q) || c.id.toLowerCase().includes(q);
     });
-    return [
+    const sorted = [
       ...filtered.filter((c) => !unavailableIds.has(c.id)),
       ...filtered.filter((c) => unavailableIds.has(c.id)),
     ];
-  }, [champions, search, unavailableIds]);
+    if (!showEmptyBan) return sorted;
+    const emptyBanMatches =
+      !q ||
+      EMPTY_BAN_CHAMPION.name.toLocaleLowerCase('zh-Hant').includes(q) ||
+      EMPTY_BAN_CHAMPION.id.toLowerCase().includes(q);
+    return emptyBanMatches ? [EMPTY_BAN_CHAMPION, ...sorted] : sorted;
+  }, [bpState.currentStep, champions, search, unavailableIds]);
 
   const activeSlotId = useMemo(() => {
     if (bpState.currentStep <= 0 || bpState.currentStep > DRAFT_FLOW.length) return null;
@@ -1013,9 +1082,10 @@ export function useBpSimulator() {
     lockEdit,
     teamSeriesScore,
     currentGameNumber,
+    seriesMode,
     seriesLength,
     seriesStarted,
-    setSeriesLength,
+    updateSeriesFormat,
     winsToWin,
     archivedSeries,
     seriesStartDate,
@@ -1048,6 +1118,7 @@ export function useBpSimulator() {
     startDraft,
     declareWinner,
     updateSeriesNote,
+    updateSeriesDate,
     updateGamePickLane,
     addSeriesEvent,
     updateSeriesEvent,
