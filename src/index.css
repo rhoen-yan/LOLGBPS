@@ -980,6 +980,55 @@ body {
   flex-direction: column;
   align-items: center;
 }
+.pick-player-name {
+  display: block;
+  max-width: 3.5rem;
+  margin-top: 0.125rem;
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  background: rgba(83, 131, 232, 0.18);
+  color: #93c5fd;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pick-player-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 7rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #111318;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.pick-player-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 0.8125rem;
+  text-align: left;
+}
+.pick-player-menu button:hover {
+  background: #252932;
+  color: var(--accent);
+}
+.pick-player-menu button.is-clear {
+  color: #9ca3af;
+}
+.lane-player-card {
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(17, 19, 24, 0.45);
+}
 .pick-lane-btn {
   position: relative;
   padding: 0;

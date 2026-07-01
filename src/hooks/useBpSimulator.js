@@ -15,6 +15,7 @@ import {
 import { fetchChampionRoster } from '../utils/championRoster';
 import { createSeriesEventId } from '../utils/championMention';
 import { emptyPickLanes } from '../utils/pickLanes';
+import { LANE_IDS } from '../constants/lanes';
 import {
   fetchRemoteRecordMeta,
   getLastSavedUpdatedAt,
@@ -79,6 +80,10 @@ function createDateHistoryEntry(previousDate, nextDate) {
   };
 }
 
+function createEmptyLanePlayers() {
+  return Object.fromEntries(LANE_IDS.map((lane) => [lane, ['', '']]));
+}
+
 export function useBpSimulator() {
   const [ddragonVersion, setDdragonVersion] = useState(DEFAULT_DDRAGON_VERSION);
   const [champions, setChampions] = useState([]);
@@ -87,6 +92,7 @@ export function useBpSimulator() {
 
   const [teamNames, setTeamNames] = useState({ Blue: '藍方', Red: '紅方' });
   const [myTeamName, setMyTeamName] = useState('');
+  const [lanePlayers, setLanePlayers] = useState(createEmptyLanePlayers);
   const [archivedSeries, setArchivedSeries] = useState([]);
   const [seriesStartDate, setSeriesStartDate] = useState(null);
   const [ourSide, setOurSide] = useState(null);
@@ -137,6 +143,7 @@ export function useBpSimulator() {
     setArchivedSeries(saved.archivedSeries ?? []);
     if (saved.teamNames) setTeamNames(saved.teamNames);
     if (saved.settings?.myTeamName !== undefined) setMyTeamName(saved.settings.myTeamName);
+    if (saved.settings?.lanePlayers) setLanePlayers(saved.settings.lanePlayers);
     const savedCurrent = saved.current;
     if (!savedCurrent) return;
     setSeriesStartDate(savedCurrent.startDate ?? null);
@@ -233,6 +240,31 @@ export function useBpSimulator() {
     [canEdit, ourSide],
   );
 
+  const updateLanePlayer = useCallback((laneId, slotIndex, value) => {
+    if (!canEdit) return;
+    if (!LANE_IDS.includes(laneId)) return;
+    const index = Number(slotIndex);
+    if (index !== 0 && index !== 1) return;
+    setLanePlayers((prev) => {
+      const next = { ...prev, [laneId]: [...(prev[laneId] ?? ['', ''])] };
+      next[laneId][index] = value;
+      return next;
+    });
+  }, [canEdit]);
+
+  const saveLanePlayer = useCallback((laneId, slotIndex, value) => {
+    if (!canEdit) return;
+    if (!LANE_IDS.includes(laneId)) return;
+    const index = Number(slotIndex);
+    if (index !== 0 && index !== 1) return;
+    const trimmed = value.trim();
+    setLanePlayers((prev) => {
+      const next = { ...prev, [laneId]: [...(prev[laneId] ?? ['', ''])] };
+      next[laneId][index] = trimmed;
+      return next;
+    });
+  }, [canEdit]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -251,7 +283,7 @@ export function useBpSimulator() {
     () => buildSeriesRecordPayload({
       archivedSeries,
       teamNames,
-      settings: { myTeamName },
+      settings: { myTeamName, lanePlayers },
       current: {
         startDate: seriesStartDate,
         ourSide,
@@ -270,6 +302,7 @@ export function useBpSimulator() {
       archivedSeries,
       teamNames,
       myTeamName,
+      lanePlayers,
       seriesStartDate,
       ourSide,
       seriesMode,
@@ -581,6 +614,8 @@ export function useBpSimulator() {
         redPicks: [...bpState.teamData.Red.picks],
         bluePickLanes: existing?.bluePickLanes ?? emptyPickLanes(),
         redPickLanes: existing?.redPickLanes ?? emptyPickLanes(),
+        bluePickPlayers: existing?.bluePickPlayers ?? emptyPickLanes(),
+        redPickPlayers: existing?.redPickPlayers ?? emptyPickLanes(),
         note: existing?.note ?? '',
         events: existing?.events ?? [],
       };
@@ -760,6 +795,8 @@ export function useBpSimulator() {
           redPicks: [...bpState.teamData.Red.picks],
           bluePickLanes: existing?.bluePickLanes ?? emptyPickLanes(),
           redPickLanes: existing?.redPickLanes ?? emptyPickLanes(),
+          bluePickPlayers: existing?.bluePickPlayers ?? emptyPickLanes(),
+          redPickPlayers: existing?.redPickPlayers ?? emptyPickLanes(),
           note: existing?.note ?? '',
           events: existing?.events ?? [],
         };
@@ -874,11 +911,28 @@ export function useBpSimulator() {
   const updateGamePickLane = useCallback(
     (seriesId, gameNumber, side, pickIndex, laneId) => {
       const laneKey = side === 'Blue' ? 'bluePickLanes' : 'redPickLanes';
+      const playerKey = side === 'Blue' ? 'bluePickPlayers' : 'redPickPlayers';
 
       patchSeriesGame(seriesId, gameNumber, (game) => {
         const lanes = [...(game[laneKey] ?? emptyPickLanes())];
-        lanes[pickIndex] = lanes[pickIndex] === laneId ? null : laneId;
-        return { ...game, [laneKey]: lanes };
+        const players = [...(game[playerKey] ?? emptyPickLanes())];
+        const nextLane = lanes[pickIndex] === laneId ? null : laneId;
+        lanes[pickIndex] = nextLane;
+        if (!nextLane) players[pickIndex] = null;
+        return { ...game, [laneKey]: lanes, [playerKey]: players };
+      });
+    },
+    [patchSeriesGame],
+  );
+
+  const updateGamePickPlayer = useCallback(
+    (seriesId, gameNumber, side, pickIndex, playerName) => {
+      const playerKey = side === 'Blue' ? 'bluePickPlayers' : 'redPickPlayers';
+
+      patchSeriesGame(seriesId, gameNumber, (game) => {
+        const players = [...(game[playerKey] ?? emptyPickLanes())];
+        players[pickIndex] = playerName || null;
+        return { ...game, [playerKey]: players };
       });
     },
     [patchSeriesGame],
@@ -1118,8 +1172,11 @@ export function useBpSimulator() {
     championLoadErrorMessage,
     teamNames,
     myTeamName,
+    lanePlayers,
     saveMyTeamName,
     updateMyTeamNameInput,
+    updateLanePlayer,
+    saveLanePlayer,
     canEdit,
     tryUnlockEdit,
     lockEdit,
@@ -1165,6 +1222,7 @@ export function useBpSimulator() {
     updateSeriesDate,
     applyRecordJson,
     updateGamePickLane,
+    updateGamePickPlayer,
     addSeriesEvent,
     updateSeriesEvent,
     removeSeriesEvent,

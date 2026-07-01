@@ -14,6 +14,16 @@ export function normalizePickLanes(picks, lanes) {
   return out;
 }
 
+export function normalizePickPlayers(picks, players) {
+  const out = emptyPickLanes();
+  const count = Math.min(Array.isArray(picks) ? picks.length : 0, 5);
+  for (let i = 0; i < count; i++) {
+    const player = typeof players?.[i] === 'string' ? players[i].trim() : '';
+    out[i] = player || null;
+  }
+  return out;
+}
+
 export function isGameLaneComplete(game) {
   const isSideComplete = (picks, laneList) => {
     if (!Array.isArray(picks) || picks.length < 5) return false;

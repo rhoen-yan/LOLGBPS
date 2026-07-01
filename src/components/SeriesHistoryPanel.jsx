@@ -123,8 +123,10 @@ function PickLaneCell({
   id,
   index,
   laneId,
+  playerName,
   isSelected,
   onSelect,
+  onPlayerMenu,
   champions,
   getChampionIconUrl,
   lanePicker,
@@ -141,6 +143,7 @@ function PickLaneCell({
           .filter(Boolean)
           .join(' ')}
         onClick={onSelect}
+        onContextMenu={(e) => onPlayerMenu(e, index, laneId)}
       >
         <img
           src={getChampionIconUrl(id)}
@@ -157,6 +160,9 @@ function PickLaneCell({
         )}
       </button>
       <span className="text-[10px] text-gray-400 mt-1 truncate w-14 text-center">{name}</span>
+      {playerName && (
+        <span className="pick-player-name" title={playerName}>{playerName}</span>
+      )}
       {isSelected && lanePicker}
     </div>
   );
@@ -167,6 +173,7 @@ function TeamHistory({
   bans,
   picks,
   pickLanes,
+  pickPlayers,
   teamName,
   seriesId,
   gameNumber,
@@ -177,6 +184,7 @@ function TeamHistory({
   laneSelection,
   onPickSelect,
   onLaneSelect,
+  onPickPlayerMenu,
 }) {
   const teamColor = side === 'Blue' ? 'text-blue-400' : 'text-red-400';
   const usedLaneIds = (pickLanes ?? []).filter(Boolean);
@@ -206,8 +214,10 @@ function TeamHistory({
               id={id}
               index={index}
               laneId={pickLanes?.[index]}
+              playerName={pickPlayers?.[index]}
               isSelected={isSelected}
               onSelect={() => onPickSelect(side, index)}
+              onPlayerMenu={(e, pickIndex, laneId) => onPickPlayerMenu(e, side, pickIndex, laneId)}
               champions={champions}
               getChampionIconUrl={getChampionIconUrl}
               lanePicker={
@@ -232,6 +242,7 @@ function GameRecord({
   getChampionIconUrl,
   updateSeriesNote,
   updateGamePickLane,
+  updateGamePickPlayer,
   updateGameWinner,
   updateGameOurSide,
   renameGameTeamName,
@@ -239,8 +250,10 @@ function GameRecord({
   updateSeriesEvent,
   removeSeriesEvent,
   canEdit,
+  lanePlayers,
 }) {
   const [laneSelection, setLaneSelection] = useState(null);
+  const [playerMenu, setPlayerMenu] = useState(null);
   const isPending = !record.winner;
   const winnerColor = record.winner === 'Blue' ? 'text-blue-400' : 'text-red-400';
   const blueName = getGameTeamName(record, series, 'Blue');
@@ -268,6 +281,31 @@ function GameRecord({
     if (readOnly) return;
     updateGamePickLane(series.id, record.game, side, index, laneId);
     setLaneSelection(null);
+  };
+
+  const handlePickPlayerMenu = (e, side, index, laneId) => {
+    e.preventDefault();
+    if (readOnly || !laneId) return;
+    const players = (lanePlayers?.[laneId] ?? []).map((name) => name.trim()).filter(Boolean);
+    if (!players.length) return;
+    if (players.length === 1) {
+      updateGamePickPlayer(series.id, record.game, side, index, players[0]);
+      setPlayerMenu(null);
+      return;
+    }
+    setPlayerMenu({
+      x: e.clientX,
+      y: e.clientY,
+      side,
+      index,
+      players,
+    });
+  };
+
+  const selectPickPlayer = (playerName) => {
+    if (!playerMenu) return;
+    updateGamePickPlayer(series.id, record.game, playerMenu.side, playerMenu.index, playerName);
+    setPlayerMenu(null);
   };
 
   return (
@@ -341,6 +379,7 @@ function GameRecord({
           bans={record.blueBans}
           picks={record.bluePicks}
           pickLanes={record.bluePickLanes}
+          pickPlayers={record.bluePickPlayers}
           teamName={blueName}
           seriesId={series.id}
           gameNumber={record.game}
@@ -351,12 +390,14 @@ function GameRecord({
           laneSelection={laneSelection}
           onPickSelect={handlePickSelect}
           onLaneSelect={handleLaneSelect}
+          onPickPlayerMenu={handlePickPlayerMenu}
         />
         <TeamHistory
           side="Red"
           bans={record.redBans}
           picks={record.redPicks}
           pickLanes={record.redPickLanes}
+          pickPlayers={record.redPickPlayers}
           teamName={redName}
           seriesId={series.id}
           gameNumber={record.game}
@@ -367,8 +408,29 @@ function GameRecord({
           laneSelection={laneSelection}
           onPickSelect={handlePickSelect}
           onLaneSelect={handleLaneSelect}
+          onPickPlayerMenu={handlePickPlayerMenu}
         />
       </div>
+      {playerMenu && (
+        <div
+          className="pick-player-menu"
+          style={{ left: playerMenu.x, top: playerMenu.y }}
+          onMouseLeave={() => setPlayerMenu(null)}
+        >
+          {playerMenu.players.map((player) => (
+            <button
+              key={player}
+              type="button"
+              onClick={() => selectPickPlayer(player)}
+            >
+              {player}
+            </button>
+          ))}
+          <button type="button" className="is-clear" onClick={() => selectPickPlayer(null)}>
+            清除
+          </button>
+        </div>
+      )}
       <div className="mt-3">
         <p className="text-[10px] text-gray-500 mb-1">備註</p>
         {readOnly ? (
@@ -529,10 +591,12 @@ function JsonTreeNode({ name, value, path, level = 0, collapsedPaths, onToggle }
 function SeriesGroup({
   series,
   champions,
+  lanePlayers,
   getChampionIconUrl,
   updateSeriesNote,
   updateSeriesDate,
   updateGamePickLane,
+  updateGamePickPlayer,
   updateGameWinner,
   updateGameOurSide,
   addSeriesEvent,
@@ -608,9 +672,11 @@ function SeriesGroup({
             record={r}
             series={series}
             champions={champions}
+            lanePlayers={lanePlayers}
             getChampionIconUrl={getChampionIconUrl}
             updateSeriesNote={updateSeriesNote}
             updateGamePickLane={updateGamePickLane}
+            updateGamePickPlayer={updateGamePickPlayer}
             updateGameWinner={updateGameWinner}
             updateGameOurSide={updateGameOurSide}
             renameGameTeamName={renameGameTeamName}
@@ -634,10 +700,12 @@ export default function SeriesHistoryPanel() {
     seriesMode,
     seriesLength,
     champions,
+    lanePlayers,
     getChampionIconUrl,
     updateSeriesNote,
     updateSeriesDate,
     updateGamePickLane,
+    updateGamePickPlayer,
     updateGameWinner,
     updateGameOurSide,
     addSeriesEvent,
@@ -864,10 +932,12 @@ export default function SeriesHistoryPanel() {
                     key={series.id}
                     series={series}
                     champions={champions}
+                    lanePlayers={lanePlayers}
                     getChampionIconUrl={getChampionIconUrl}
                     updateSeriesNote={updateSeriesNote}
                     updateSeriesDate={updateSeriesDate}
                     updateGamePickLane={updateGamePickLane}
+                    updateGamePickPlayer={updateGamePickPlayer}
                     updateGameWinner={updateGameWinner}
                     updateGameOurSide={updateGameOurSide}
                     addSeriesEvent={addSeriesEvent}

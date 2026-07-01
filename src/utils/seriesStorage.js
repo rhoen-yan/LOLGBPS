@@ -1,6 +1,7 @@
 import { createEmptyBpState, getWinsToWin, normalizeSeriesLength, normalizeSeriesMode } from '../constants';
 import { createSeriesEventId } from './championMention';
-import { normalizePickLanes } from './pickLanes';
+import { normalizePickLanes, normalizePickPlayers } from './pickLanes';
+import { LANE_IDS } from '../constants/lanes';
 
 export const STORAGE_SERIES = 'bp-series-record';
 
@@ -43,6 +44,8 @@ function normalizeHistoryEntry(entry, legacyOurSide = null) {
     redPicks: Array.isArray(entry.redPicks) ? entry.redPicks.filter((id) => typeof id === 'string') : [],
     bluePickLanes: normalizePickLanes(entry.bluePicks, entry.bluePickLanes),
     redPickLanes: normalizePickLanes(entry.redPicks, entry.redPickLanes),
+    bluePickPlayers: normalizePickPlayers(entry.bluePicks, entry.bluePickPlayers),
+    redPickPlayers: normalizePickPlayers(entry.redPicks, entry.redPickPlayers),
     note: typeof entry.note === 'string' ? entry.note : '',
     events: Array.isArray(entry.events) ? entry.events.map(normalizeEvent).filter(Boolean) : [],
   };
@@ -64,7 +67,19 @@ function normalizeOurSide(value) {
 function normalizeSettings(settings) {
   return {
     myTeamName: typeof settings?.myTeamName === 'string' ? settings.myTeamName.trim() : '',
+    lanePlayers: normalizeLanePlayers(settings?.lanePlayers),
   };
+}
+
+function normalizeLanePlayers(lanePlayers) {
+  const out = {};
+  for (const lane of LANE_IDS) {
+    const raw = Array.isArray(lanePlayers?.[lane]) ? lanePlayers[lane] : [];
+    out[lane] = [0, 1].map((index) =>
+      typeof raw[index] === 'string' ? raw[index].trim() : '',
+    );
+  }
+  return out;
 }
 
 function normalizeDateHistory(history) {
