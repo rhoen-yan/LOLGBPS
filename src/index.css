@@ -717,7 +717,7 @@ body {
 }
 .history-event-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 .history-event-time-group {
