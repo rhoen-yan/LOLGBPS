@@ -768,7 +768,7 @@ export function useBpSimulator() {
           ? prev.map((g) => (g.game === currentGameNumber ? finalized : g))
           : [...prev, finalized];
 
-        const { teamA, teamB, scoreA, scoreB } = computeTeamSeriesScore({
+        const { scoreA, scoreB } = computeTeamSeriesScore({
           teamNames,
           games: next,
         });
@@ -780,16 +780,6 @@ export function useBpSimulator() {
         if (!fixedCountComplete && !boComplete) {
           setCurrentGameNumber((g) => g + 1);
           resetGame();
-        } else {
-          const finalWinnerName = scoreA === scoreB ? null : scoreA > scoreB ? teamA : teamB;
-          const wScore = finalWinnerName === teamA ? scoreA : scoreB;
-          const lScore = finalWinnerName === teamA ? scoreB : scoreA;
-          showModal(
-            '系列賽結束',
-            finalWinnerName
-              ? `${finalWinnerName} 以 ${wScore}:${lScore} 贏下系列賽。`
-              : `系列賽結束，比分 ${scoreA}:${scoreB}。`,
-          );
         }
 
         return next;
