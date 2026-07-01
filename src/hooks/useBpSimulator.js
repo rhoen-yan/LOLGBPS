@@ -28,8 +28,10 @@ import {
   buildArchivedSeriesSnapshot,
   buildSeriesRecordPayload,
   computeTeamSeriesScore,
+  createSeriesId,
   formatDateYmd,
   getSeriesMatchupNames,
+  parseSeriesRecord,
 } from '../utils/seriesStorage';
 
 function parseSlotFromId(slotId) {
@@ -68,6 +70,15 @@ function clearMyTeamNameFromSides(teamNames, myTeamName) {
   return updated;
 }
 
+function createDateHistoryEntry(previousDate, nextDate) {
+  return {
+    id: createSeriesId(),
+    changedAt: new Date().toISOString(),
+    previousDate: previousDate || '',
+    nextDate: nextDate || '',
+  };
+}
+
 export function useBpSimulator() {
   const [ddragonVersion, setDdragonVersion] = useState(DEFAULT_DDRAGON_VERSION);
   const [champions, setChampions] = useState([]);
@@ -85,6 +96,7 @@ export function useBpSimulator() {
   const [seriesLength, setSeriesLength] = useState(5);
   const [seriesHistory, setSeriesHistory] = useState([]);
   const [seriesPickedChampions, setSeriesPickedChampions] = useState([]);
+  const [seriesDateHistory, setSeriesDateHistory] = useState([]);
   const [recordHydrated, setRecordHydrated] = useState(false);
   const [canEdit, setCanEdit] = useState(() => readEditUnlocked());
   const [bpState, setBpState] = useState(createEmptyBpState);
@@ -135,6 +147,7 @@ export function useBpSimulator() {
     setSeriesLength(normalizeSeriesLength(savedCurrent.seriesLength, savedCurrent.seriesMode));
     setSeriesHistory(savedCurrent.seriesHistory ?? []);
     setSeriesPickedChampions(savedCurrent.seriesPickedChampions ?? []);
+    setSeriesDateHistory(savedCurrent.dateHistory ?? []);
     if (savedCurrent.bpState) setBpState(savedCurrent.bpState);
     setTeamInputsLocked(Boolean(savedCurrent.teamInputsLocked));
   }, []);
@@ -234,9 +247,8 @@ export function useBpSimulator() {
     };
   }, [applyRecordSnapshot]);
 
-  useEffect(() => {
-    if (!recordHydrated) return;
-    const payload = buildSeriesRecordPayload({
+  const recordPayload = useMemo(
+    () => buildSeriesRecordPayload({
       archivedSeries,
       teamNames,
       settings: { myTeamName },
@@ -249,31 +261,36 @@ export function useBpSimulator() {
         currentGameNumber,
         seriesHistory,
         seriesPickedChampions,
+        dateHistory: seriesDateHistory,
         bpState,
         teamInputsLocked,
       },
-    });
+    }),
+    [
+      archivedSeries,
+      teamNames,
+      myTeamName,
+      seriesStartDate,
+      ourSide,
+      seriesMode,
+      seriesLength,
+      currentSeriesScore,
+      currentGameNumber,
+      seriesHistory,
+      seriesPickedChampions,
+      seriesDateHistory,
+      bpState,
+      teamInputsLocked,
+    ],
+  );
+
+  useEffect(() => {
+    if (!recordHydrated) return;
     if (!canEdit) return;
-    schedulePersistRecord(payload, (updatedAt) => {
+    schedulePersistRecord(recordPayload, (updatedAt) => {
       if (updatedAt) lastAppliedRemoteAtRef.current = updatedAt;
     });
-  }, [
-    recordHydrated,
-    canEdit,
-    archivedSeries,
-    teamNames,
-    myTeamName,
-    seriesStartDate,
-    ourSide,
-    seriesHistory,
-    currentSeriesScore,
-    currentGameNumber,
-    seriesMode,
-    seriesLength,
-    seriesPickedChampions,
-    bpState,
-    teamInputsLocked,
-  ]);
+  }, [recordHydrated, canEdit, recordPayload]);
 
   const bpStateRef = useRef(bpState);
   bpStateRef.current = bpState;
@@ -606,6 +623,7 @@ export function useBpSimulator() {
       startDate: seriesStartDate,
       seriesMode,
       seriesLength,
+      dateHistory: seriesDateHistory,
       teamNames,
       currentSeriesScore,
       seriesHistory,
@@ -613,7 +631,7 @@ export function useBpSimulator() {
     if (snapshot) {
       setArchivedSeries((prev) => [...prev, snapshot]);
     }
-  }, [seriesStartDate, seriesMode, seriesLength, teamNames, currentSeriesScore, seriesHistory]);
+  }, [seriesStartDate, seriesMode, seriesLength, seriesDateHistory, teamNames, currentSeriesScore, seriesHistory]);
 
   const clearCurrentSeries = useCallback(() => {
     setSeriesStartDate(null);
@@ -623,6 +641,7 @@ export function useBpSimulator() {
     setCurrentGameNumber(1);
     setSeriesHistory([]);
     setSeriesPickedChampions([]);
+    setSeriesDateHistory([]);
     resetGame();
     setTeamInputsLocked(false);
   }, [resetGame, myTeamName]);
@@ -657,6 +676,7 @@ export function useBpSimulator() {
     setCurrentGameNumber(1);
     setSeriesHistory([]);
     setSeriesPickedChampions([]);
+    setSeriesDateHistory([]);
     resetGame();
     showModal('已重置', `${formatSeriesLabel(seriesLength, seriesMode)} 系列賽已重置，Pick 禁用清單已清除。`);
   }, [canEdit, archiveCurrentSeries, resetGame, showModal, seriesMode, seriesLength, myTeamName]);
@@ -809,16 +829,49 @@ export function useBpSimulator() {
       if (!canEdit) return;
       const normalized = startDate || formatDateYmd();
       if (seriesId === 'current') {
-        setSeriesStartDate(normalized);
+        setSeriesStartDate((prev) => {
+          const previous = prev || '';
+          if (previous === normalized) return prev;
+          setSeriesDateHistory((history) => [
+            ...history,
+            createDateHistoryEntry(previous, normalized),
+          ]);
+          return normalized;
+        });
         return;
       }
       setArchivedSeries((prev) =>
-        prev.map((series) =>
-          series.id === seriesId ? { ...series, startDate: normalized } : series,
-        ),
+        prev.map((series) => {
+          if (series.id !== seriesId) return series;
+          if (series.startDate === normalized) return series;
+          return {
+            ...series,
+            startDate: normalized,
+            dateHistory: [
+              ...(series.dateHistory ?? []),
+              createDateHistoryEntry(series.startDate, normalized),
+            ],
+          };
+        }),
       );
     },
     [canEdit],
+  );
+
+  const applyRecordJson = useCallback(
+    (jsonText) => {
+      if (!canEdit) throw new Error('目前沒有編輯權限。');
+      let parsedRaw;
+      try {
+        parsedRaw = JSON.parse(jsonText);
+      } catch (err) {
+        throw new Error(`JSON 格式錯誤：${err.message}`);
+      }
+      const parsed = parseSeriesRecord(parsedRaw);
+      if (!parsed) throw new Error('JSONB 內容不是有效的系列賽紀錄。');
+      applyRecordSnapshot(parsed);
+    },
+    [canEdit, applyRecordSnapshot],
   );
 
   const updateSeriesNote = useCallback(
@@ -1093,6 +1146,7 @@ export function useBpSimulator() {
     toggleOurSide,
     canChangeOurSide,
     teamsBarFlash,
+    recordPayload,
     seriesHistory,
     seriesPickedChampions,
     bpState,
@@ -1119,6 +1173,7 @@ export function useBpSimulator() {
     declareWinner,
     updateSeriesNote,
     updateSeriesDate,
+    applyRecordJson,
     updateGamePickLane,
     addSeriesEvent,
     updateSeriesEvent,

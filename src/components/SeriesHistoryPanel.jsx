@@ -586,6 +586,8 @@ export default function SeriesHistoryPanel() {
     removeSeriesEvent,
     requestRemoveSeries,
     renameGameTeamName,
+    recordPayload,
+    applyRecordJson,
     canEdit,
   } = useBp();
 
@@ -593,6 +595,11 @@ export default function SeriesHistoryPanel() {
   const [teamFilter, setTeamFilter] = useState('');
   const [scopeFilter, setScopeFilter] = useState('series');
   const [resultFilter, setResultFilter] = useState('all');
+  const [jsonModalOpen, setJsonModalOpen] = useState(false);
+  const [jsonOriginal, setJsonOriginal] = useState('');
+  const [jsonDraft, setJsonDraft] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const titleClickRef = useRef({ count: 0, lastAt: 0 });
 
   const filters = useMemo(
     () => ({ dateFilter, teamFilter, scopeFilter, resultFilter }),
@@ -648,11 +655,53 @@ export default function SeriesHistoryPanel() {
   }, [allSeries, filters]);
 
   const hasVisible = groupedByDate.length > 0;
+  const changedJsonLines = useMemo(() => {
+    if (!jsonModalOpen) return [];
+    const originalLines = jsonOriginal.split('\n');
+    const draftLines = jsonDraft.split('\n');
+    const max = Math.max(originalLines.length, draftLines.length);
+    const rows = [];
+    for (let i = 0; i < max; i += 1) {
+      if ((originalLines[i] ?? '') !== (draftLines[i] ?? '')) {
+        rows.push({ line: i + 1, text: draftLines[i] ?? '' });
+      }
+    }
+    return rows;
+  }, [jsonModalOpen, jsonOriginal, jsonDraft]);
+
+  const openJsonEditor = () => {
+    const formatted = JSON.stringify(recordPayload, null, 2);
+    setJsonOriginal(formatted);
+    setJsonDraft(formatted);
+    setJsonError('');
+    setJsonModalOpen(true);
+  };
+
+  const handleTitleClick = () => {
+    if (!canEdit) return;
+    const now = Date.now();
+    const state = titleClickRef.current;
+    state.count = now - state.lastAt > 1400 ? 1 : state.count + 1;
+    state.lastAt = now;
+    if (state.count >= 5) {
+      state.count = 0;
+      openJsonEditor();
+    }
+  };
+
+  const saveJsonDraft = () => {
+    try {
+      applyRecordJson(jsonDraft);
+      setJsonModalOpen(false);
+    } catch (err) {
+      setJsonError(err.message || 'JSONB 套用失敗。');
+    }
+  };
 
   return (
     <section className="panel p-6 mb-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
-        <h3 className="text-base font-bold">系列賽紀錄</h3>
+        <h3 className="text-base font-bold" onClick={handleTitleClick}>系列賽紀錄</h3>
         {boStats.total > 0 && (
           <p className="text-sm tabular-nums text-gray-300">
             <span className="text-emerald-400 font-semibold">W : {boStats.wins}</span>
@@ -755,6 +804,67 @@ export default function SeriesHistoryPanel() {
           ))
         )}
       </div>
+      {jsonModalOpen && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+          <div className="panel json-editor-modal">
+            <div className="json-editor-header">
+              <div>
+                <h3 className="text-lg font-bold">JSONB 編輯</h3>
+                <p className="text-xs text-gray-500 mt-1">日期修改會保留在 dateHistory，可用來回查或手動 rollback。</p>
+              </div>
+              <button
+                type="button"
+                className="series-remove-btn"
+                aria-label="關閉"
+                title="關閉"
+                onClick={() => setJsonModalOpen(false)}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <textarea
+              className="json-editor-textarea custom-scroll"
+              spellCheck={false}
+              value={jsonDraft}
+              onChange={(e) => {
+                setJsonDraft(e.target.value);
+                setJsonError('');
+              }}
+            />
+            <div className="json-editor-diff custom-scroll">
+              {changedJsonLines.length ? (
+                changedJsonLines.map((row) => (
+                  <div key={row.line} className="json-editor-diff-row">
+                    <span className="json-editor-line-no">{row.line}</span>
+                    <code>{row.text || ' '}</code>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-gray-500 px-3 py-2">尚未修改任何列</p>
+              )}
+            </div>
+            {jsonError && <p className="json-editor-error">{jsonError}</p>}
+            <div className="json-editor-actions">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold"
+                onClick={() => setJsonModalOpen(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold"
+                onClick={saveJsonDraft}
+              >
+                套用 JSONB
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

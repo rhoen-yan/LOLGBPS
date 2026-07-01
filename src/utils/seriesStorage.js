@@ -67,6 +67,21 @@ function normalizeSettings(settings) {
   };
 }
 
+function normalizeDateHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      return {
+        id: typeof entry.id === 'string' ? entry.id : createSeriesId(),
+        changedAt: typeof entry.changedAt === 'string' ? entry.changedAt : formatDateYmd(),
+        previousDate: typeof entry.previousDate === 'string' ? entry.previousDate : '',
+        nextDate: typeof entry.nextDate === 'string' ? entry.nextDate : '',
+      };
+    })
+    .filter(Boolean);
+}
+
 export function resolveOurSideFromTeamNames(teamNames, myTeamName) {
   const q = myTeamName?.trim();
   if (!q) return null;
@@ -100,6 +115,7 @@ function normalizeArchivedSeries(entry) {
     seriesLength: normalizeSeriesLength(entry.seriesLength, entry.seriesMode),
     teamNames: normalizeTeamNames(entry.teamNames),
     finalScore: normalizeScore(entry.finalScore),
+    dateHistory: normalizeDateHistory(entry.dateHistory),
     games,
   };
 }
@@ -152,6 +168,7 @@ function normalizeCurrentSeries(data) {
     seriesPickedChampions: Array.isArray(data?.seriesPickedChampions)
       ? data.seriesPickedChampions.filter((id) => typeof id === 'string')
       : [],
+    dateHistory: normalizeDateHistory(data?.dateHistory),
     bpState: normalizeBpState(data?.bpState),
     teamInputsLocked: Boolean(data?.teamInputsLocked),
   };
@@ -222,6 +239,7 @@ export function buildArchivedSeriesSnapshot({
   startDate,
   seriesMode,
   seriesLength,
+  dateHistory,
   teamNames,
   currentSeriesScore,
   seriesHistory,
@@ -234,6 +252,7 @@ export function buildArchivedSeriesSnapshot({
     startDate: startDate || formatDateYmd(),
     seriesMode,
     seriesLength,
+    dateHistory,
     teamNames,
     finalScore: currentSeriesScore,
     games,
