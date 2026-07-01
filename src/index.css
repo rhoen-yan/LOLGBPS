@@ -459,8 +459,8 @@ body {
 }
 .history-item { border-left: 3px solid var(--border); }
 .history-item.winner-pending { border-left-color: var(--accent); }
-.history-item.winner-blue { border-left-color: var(--blue); }
-.history-item.winner-red { border-left-color: var(--red); }
+.history-item.winner-blue { border-left-color: #5383e8; }
+.history-item.winner-red { border-left-color: #e84057; }
 .password-gate {
   position: fixed;
   right: 1rem;

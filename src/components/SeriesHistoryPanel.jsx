@@ -242,7 +242,6 @@ function GameRecord({
 }) {
   const [laneSelection, setLaneSelection] = useState(null);
   const isPending = !record.winner;
-  const winnerCls = isPending ? 'winner-pending' : record.winner === 'Blue' ? 'winner-blue' : 'winner-red';
   const winnerColor = record.winner === 'Blue' ? 'text-blue-400' : 'text-red-400';
   const blueName = getGameTeamName(record, series, 'Blue');
   const redName = getGameTeamName(record, series, 'Red');
@@ -250,6 +249,7 @@ function GameRecord({
   const otherWinner = record.winner === 'Blue' ? 'Red' : 'Blue';
   const otherWinnerName = otherWinner === 'Blue' ? blueName : redName;
   const ourResult = getOurGameResult(record, record.ourSide);
+  const winnerCls = isPending ? 'winner-pending' : ourResult === 'win' ? 'winner-blue' : 'winner-red';
   const ourSideName = record.ourSide === 'Blue' ? blueName : record.ourSide === 'Red' ? redName : null;
   const otherOurSide = record.ourSide === 'Blue' ? 'Red' : 'Blue';
   const otherOurSideName = otherOurSide === 'Blue' ? blueName : redName;
