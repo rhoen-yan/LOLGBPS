@@ -162,6 +162,14 @@ export function applyOurTeamContextFilters(contexts, myTeamName = '', filters = 
   if (filters.sideFilter === 'Blue' || filters.sideFilter === 'Red') {
     result = result.filter((ctx) => resolveOurTeamSide(ctx, myTeamName) === filters.sideFilter);
   }
+  if (filters.playerFilter) {
+    result = result.filter((ctx) => {
+      const ourSide = resolveOurTeamSide(ctx, myTeamName);
+      if (!ourSide) return false;
+      const players = ourSide === 'Blue' ? ctx.game.bluePickPlayers : ctx.game.redPickPlayers;
+      return (players ?? []).includes(filters.playerFilter);
+    });
+  }
   if (filters.resultFilter === 'win' || filters.resultFilter === 'loss') {
     result = result.filter((ctx) => {
       const ourSide = resolveOurTeamSide(ctx, myTeamName);

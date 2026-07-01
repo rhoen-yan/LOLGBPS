@@ -261,7 +261,7 @@ function LanePresenceBar({ rows }) {
   );
 }
 
-function AnalyticsFilters({ filters, setFilters, dateOptions, opponentOptions }) {
+function AnalyticsFilters({ filters, setFilters, dateOptions, opponentOptions, playerOptions }) {
   return (
     <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-gray-800/40 border border-gray-700/60">
       <label className="flex flex-col gap-1 text-xs text-gray-400">
@@ -314,6 +314,21 @@ function AnalyticsFilters({ filters, setFilters, dateOptions, opponentOptions })
           <option value="Red">紅方</option>
         </select>
       </label>
+      {playerOptions.length >= 2 && (
+        <label className="flex flex-col gap-1 text-xs text-gray-400">
+          選手
+          <select
+            className="bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 min-w-[9rem]"
+            value={filters.playerFilter}
+            onChange={(e) => setFilters((f) => ({ ...f, playerFilter: e.target.value }))}
+          >
+            <option value="">全部</option>
+            {playerOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="flex items-center gap-2 text-xs text-gray-400 pb-1.5 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -424,6 +439,7 @@ export default function AnalyticsPage() {
   const [filters, setFilters] = useState({
     dateFilter: '',
     teamFilter: '',
+    playerFilter: '',
     resultFilter: 'all',
     sideFilter: 'all',
     laneCompleteOnly: true,
@@ -454,9 +470,18 @@ export default function AnalyticsPage() {
       record?.current?.startDate ?? null,
     );
     const myTeamName = record?.settings?.myTeamName ?? '';
+    const playerOptions = [
+      ...new Set(
+        Object.values(record?.settings?.lanePlayers ?? {})
+          .flat()
+          .map((name) => (typeof name === 'string' ? name.trim() : ''))
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
     return {
       contexts,
       myTeamName,
+      playerOptions,
       opponentOptions: collectOpponentTeamOptions(contexts, myTeamName),
       rivalTeamOptions: collectRivalTeamOptions(contexts, myTeamName),
       teamOptions: collectTeamNameOptions(contexts),
@@ -469,6 +494,7 @@ export default function AnalyticsPage() {
     () => ({
       dateFilter: filters.dateFilter,
       teamFilter: filters.teamFilter,
+      playerFilter: filters.playerFilter,
       resultFilter: filters.resultFilter,
       sideFilter: filters.sideFilter === 'all' ? undefined : filters.sideFilter,
       laneCompleteOnly: filters.laneCompleteOnly,
@@ -530,6 +556,7 @@ export default function AnalyticsPage() {
             setFilters={setFilters}
             dateOptions={recordData.dateOptions}
             opponentOptions={recordData.opponentOptions}
+            playerOptions={recordData.playerOptions}
           />
         </div>
       )}

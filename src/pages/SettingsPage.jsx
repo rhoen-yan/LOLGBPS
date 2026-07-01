@@ -29,7 +29,7 @@ export default function SettingsPage() {
       </label>
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-300 mb-3">路線人員</h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-3">路線選手</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
           {LANES.map((lane) => (
             <div key={lane.id} className="lane-player-card">
@@ -39,12 +39,12 @@ export default function SettingsPage() {
               </div>
               {[0, 1].map((slot) => (
                 <label key={slot} className="flex flex-col gap-1 text-xs text-gray-500 mb-2 last:mb-0">
-                  人員 {slot + 1}
+                  選手 {slot + 1}
                   <input
                     type="text"
                     className="bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100"
                     maxLength={20}
-                    placeholder={`人員 ${slot + 1}`}
+                    placeholder={`選手 ${slot + 1}`}
                     value={lanePlayers?.[lane.id]?.[slot] ?? ''}
                     disabled={!canEdit}
                     onChange={(e) => updateLanePlayer(lane.id, slot, e.target.value)}
