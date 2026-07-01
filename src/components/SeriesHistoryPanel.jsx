@@ -467,6 +467,65 @@ function SeriesDateButton({ value, onChange }) {
   );
 }
 
+function JsonTreeNode({ name, value, path, level = 0, collapsedPaths, onToggle }) {
+  const isArray = Array.isArray(value);
+  const isObject = value && typeof value === 'object';
+  const isCollapsible = isArray || isObject;
+  const collapsed = collapsedPaths.has(path);
+  const entries = isCollapsible ? Object.entries(value) : [];
+  const preview = isArray ? `Array(${value.length})` : isObject ? `Object(${entries.length})` : JSON.stringify(value);
+  const openMark = isArray ? '[' : '{';
+  const closeMark = isArray ? ']' : '}';
+
+  return (
+    <div className="json-tree-node" style={{ '--json-level': level }}>
+      <div className="json-tree-line">
+        {isCollapsible ? (
+          <button
+            type="button"
+            className="json-tree-toggle"
+            onClick={() => onToggle(path)}
+            aria-label={collapsed ? '展開' : '收合'}
+          >
+            {collapsed ? '▸' : '▾'}
+          </button>
+        ) : (
+          <span className="json-tree-toggle-spacer" />
+        )}
+        {name != null && <span className="json-tree-key">{name}:</span>}
+        {isCollapsible ? (
+          <span className="json-tree-summary">
+            {collapsed ? preview : openMark}
+          </span>
+        ) : (
+          <span className={`json-tree-value json-tree-value-${typeof value}`}>{preview}</span>
+        )}
+      </div>
+      {isCollapsible && !collapsed && (
+        <>
+          <div>
+            {entries.map(([key, child]) => (
+              <JsonTreeNode
+                key={`${path}.${key}`}
+                name={key}
+                value={child}
+                path={`${path}.${key}`}
+                level={level + 1}
+                collapsedPaths={collapsedPaths}
+                onToggle={onToggle}
+              />
+            ))}
+          </div>
+          <div className="json-tree-line json-tree-close">
+            <span className="json-tree-toggle-spacer" />
+            <span className="json-tree-summary">{closeMark}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function SeriesGroup({
   series,
   champions,
@@ -599,6 +658,8 @@ export default function SeriesHistoryPanel() {
   const [jsonOriginal, setJsonOriginal] = useState('');
   const [jsonDraft, setJsonDraft] = useState('');
   const [jsonError, setJsonError] = useState('');
+  const [jsonViewMode, setJsonViewMode] = useState('text');
+  const [collapsedJsonPaths, setCollapsedJsonPaths] = useState(() => new Set());
   const titleClickRef = useRef({ count: 0, lastAt: 0 });
 
   const filters = useMemo(
@@ -668,12 +729,22 @@ export default function SeriesHistoryPanel() {
     }
     return rows;
   }, [jsonModalOpen, jsonOriginal, jsonDraft]);
+  const parsedJsonDraft = useMemo(() => {
+    if (!jsonModalOpen) return { ok: false, value: null, error: '' };
+    try {
+      return { ok: true, value: JSON.parse(jsonDraft), error: '' };
+    } catch (err) {
+      return { ok: false, value: null, error: err.message };
+    }
+  }, [jsonModalOpen, jsonDraft]);
 
   const openJsonEditor = () => {
     const formatted = JSON.stringify(recordPayload, null, 2);
     setJsonOriginal(formatted);
     setJsonDraft(formatted);
     setJsonError('');
+    setJsonViewMode('text');
+    setCollapsedJsonPaths(new Set());
     setJsonModalOpen(true);
   };
 
@@ -696,6 +767,15 @@ export default function SeriesHistoryPanel() {
     } catch (err) {
       setJsonError(err.message || 'JSONB 套用失敗。');
     }
+  };
+
+  const toggleJsonPath = (path) => {
+    setCollapsedJsonPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   };
 
   return (
@@ -824,15 +904,47 @@ export default function SeriesHistoryPanel() {
                 </svg>
               </button>
             </div>
-            <textarea
-              className="json-editor-textarea custom-scroll"
-              spellCheck={false}
-              value={jsonDraft}
-              onChange={(e) => {
-                setJsonDraft(e.target.value);
-                setJsonError('');
-              }}
-            />
+            <div className="json-editor-tabs" role="tablist" aria-label="JSONB 檢視模式">
+              <button
+                type="button"
+                className={jsonViewMode === 'text' ? 'is-active' : ''}
+                onClick={() => setJsonViewMode('text')}
+              >
+                文字
+              </button>
+              <button
+                type="button"
+                className={jsonViewMode === 'tree' ? 'is-active' : ''}
+                onClick={() => setJsonViewMode('tree')}
+              >
+                樹狀
+              </button>
+            </div>
+            {jsonViewMode === 'text' ? (
+              <textarea
+                className="json-editor-textarea custom-scroll"
+                spellCheck={false}
+                value={jsonDraft}
+                onChange={(e) => {
+                  setJsonDraft(e.target.value);
+                  setJsonError('');
+                }}
+              />
+            ) : (
+              <div className="json-tree-view custom-scroll">
+                {parsedJsonDraft.ok ? (
+                  <JsonTreeNode
+                    name={null}
+                    value={parsedJsonDraft.value}
+                    path="$"
+                    collapsedPaths={collapsedJsonPaths}
+                    onToggle={toggleJsonPath}
+                  />
+                ) : (
+                  <p className="json-editor-error px-3 py-2">JSON 格式錯誤：{parsedJsonDraft.error}</p>
+                )}
+              </div>
+            )}
             <div className="json-editor-diff custom-scroll">
               {changedJsonLines.length ? (
                 changedJsonLines.map((row) => (
