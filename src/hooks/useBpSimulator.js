@@ -768,7 +768,7 @@ export function useBpSimulator() {
             '系列賽結束',
             finalWinnerName
               ? `${finalWinnerName} 以 ${wScore}:${lScore} 贏下系列賽。`
-              : `系列賽以 ${scoreA}:${scoreB} 平手結束。`,
+              : `系列賽結束，比分 ${scoreA}:${scoreB}。`,
           );
         }
 

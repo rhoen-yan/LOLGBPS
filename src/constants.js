@@ -9,7 +9,7 @@ export const GAME_COUNT_OPTIONS = [1, 2, 3, 4, 5];
 export const EMPTY_BAN_ID = '__empty_ban__';
 export const EMPTY_BAN_CHAMPION = {
   id: EMPTY_BAN_ID,
-  name: '空 BAN',
+  name: '空',
   icon: '/icons/empty-ban.png',
 };
 

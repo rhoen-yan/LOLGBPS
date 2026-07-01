@@ -12,7 +12,7 @@ export default function AppNav() {
   return (
     <nav className="flex gap-2 mb-6">
       <NavLink to="/" end className={linkClass}>
-        模擬器
+        Ban/Pick
       </NavLink>
       <NavLink to="/analytics" className={linkClass}>
         分析

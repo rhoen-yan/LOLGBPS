@@ -361,6 +361,17 @@ export function isSeriesDecided(series) {
   return scoreA >= needed || scoreB >= needed;
 }
 
+function countOurGameResults(series) {
+  let wins = 0;
+  let losses = 0;
+  for (const game of series.games ?? []) {
+    const result = getOurGameResult(game, game.ourSide);
+    if (result === 'win') wins += 1;
+    else if (result === 'loss') losses += 1;
+  }
+  return { wins, losses };
+}
+
 export function computeBoSeriesStats(seriesList, { dateFilter = '', teamFilter = '' } = {}) {
   const teamQ = teamFilter.trim().toLocaleLowerCase('zh-Hant');
   let wins = 0;
@@ -372,6 +383,12 @@ export function computeBoSeriesStats(seriesList, { dateFilter = '', teamFilter =
       if (!seriesMatchesTeamQuery(series, teamQ)) continue;
     }
     if (!isSeriesDecided(series)) continue;
+    if (normalizeSeriesMode(series.seriesMode) === 'games') {
+      const gameResults = countOurGameResults(series);
+      wins += gameResults.wins;
+      losses += gameResults.losses;
+      continue;
+    }
     const result = getOurSeriesResult(series);
     if (!result) continue;
     if (result === 'win') wins++;
@@ -395,6 +412,9 @@ export function seriesMatchesFilters(series, { dateFilter, teamFilter, resultFil
 
   if (scopeFilter === 'series') {
     if (!isSeriesDecided(series)) return false;
+    if (normalizeSeriesMode(series.seriesMode) === 'games') {
+      return series.games.some((g) => g.ourSide && getOurGameResult(g, g.ourSide) === resultFilter);
+    }
     return getOurSeriesResult(series) === resultFilter;
   }
 
