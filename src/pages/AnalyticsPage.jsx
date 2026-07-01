@@ -473,6 +473,7 @@ export default function AnalyticsPage() {
     const playerOptions = [
       ...new Set(
         Object.values(record?.settings?.lanePlayers ?? {})
+          .filter((players) => players.filter((name) => typeof name === 'string' && name.trim()).length >= 2)
           .flat()
           .map((name) => (typeof name === 'string' ? name.trim() : ''))
           .filter(Boolean),
