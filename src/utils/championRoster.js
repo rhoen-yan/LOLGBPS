@@ -17,6 +17,7 @@ export async function fetchChampionRoster() {
   if (!entries.length) throw new Error('未取得英雄資料');
 
   const champions = entries
+    .filter(({ id }) => !id.startsWith('Jade_'))
     .map(({ id, name }) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
 
