@@ -109,7 +109,15 @@ function MatchupRow({ row, champions, getChampionIconUrl, showLane = false }) {
   );
 }
 
-function RoleBlock({ role, champions, getChampionIconUrl, showWin = true, laneRate, mode = 'pick' }) {
+function RoleBlock({
+  role,
+  champions,
+  getChampionIconUrl,
+  showWin = true,
+  showPickRate = true,
+  laneRate,
+  mode = 'pick',
+}) {
   if (!role.champions.length && laneRate == null) return null;
   const rateLabel = mode === 'ban' ? 'BAN 率' : '出場率';
   return (
@@ -128,7 +136,9 @@ function RoleBlock({ role, champions, getChampionIconUrl, showWin = true, laneRa
             <thead>
               <tr className="text-[10px] text-gray-500 uppercase tracking-wide">
                 <th className="pb-2 text-left font-medium">英雄</th>
-                <th className="pb-2 text-right font-medium">{rateLabel}</th>
+                {(mode === 'ban' || showPickRate) && (
+                  <th className="pb-2 text-right font-medium">{rateLabel}</th>
+                )}
                 {showWin && mode === 'pick' && <th className="pb-2 text-right font-medium">勝率</th>}
               </tr>
             </thead>
@@ -147,9 +157,11 @@ function RoleBlock({ role, champions, getChampionIconUrl, showWin = true, laneRa
                       </span>
                     </div>
                   </td>
-                  <td className="py-2 px-2 text-sm tabular-nums text-right text-gray-300">
-                    {formatRate(mode === 'ban' ? row.banRate : row.pickRate)}
-                  </td>
+                  {(mode === 'ban' || showPickRate) && (
+                    <td className="py-2 px-2 text-sm tabular-nums text-right text-gray-300">
+                      {formatRate(mode === 'ban' ? row.banRate : row.pickRate)}
+                    </td>
+                  )}
                   {showWin && mode === 'pick' && (
                     <td className="py-2 pl-2 text-sm tabular-nums text-right text-gray-300">
                       {formatRate(row.winRate)}
@@ -595,22 +607,21 @@ export default function AnalyticsPage() {
               {hasOurData && (
                 <>
                   <div>
-                    <h4 className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wide">出場</h4>
+                    <div className="mb-3">
+                      <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">我方選角勝率</h4>
+                      <p className="mt-1 text-xs text-gray-600">勝率為選到該英雄時的獲勝比例</p>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {data.our.roles.map((role) => {
-                        const presence = data.ourLanePresence.find((r) => r.laneId === role.laneId);
-                        return (
-                          <RoleBlock
-                            key={role.laneId}
-                            role={role}
-                            champions={champions}
-                            getChampionIconUrl={getChampionIconUrl}
-                            showWin={false}
-                            laneRate={presence?.pickRate}
-                            mode="pick"
-                          />
-                        );
-                      })}
+                      {data.our.roles.map((role) => (
+                        <RoleBlock
+                          key={role.laneId}
+                          role={role}
+                          champions={champions}
+                          getChampionIconUrl={getChampionIconUrl}
+                          showPickRate={false}
+                          mode="pick"
+                        />
+                      ))}
                     </div>
                   </div>
                   <div>

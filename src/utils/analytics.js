@@ -238,25 +238,31 @@ function aggregateChampionStats(items, trackWins = true) {
   const champMap = new Map();
   const roleMaps = new Map(LANES.map((lane) => [lane.id, new Map()]));
 
-  for (const { bans, picksWithLanes, won } of items) {
+  for (const { bans, picksWithLanes, won, decided } of items) {
     for (const id of bans) {
       if (!id || isEmptyBanId(id)) continue;
-      const entry = champMap.get(id) ?? { id, picks: 0, wins: 0, bans: 0 };
+      const entry = champMap.get(id) ?? { id, picks: 0, decidedPicks: 0, wins: 0, bans: 0 };
       entry.bans += 1;
       champMap.set(id, entry);
     }
 
     for (const { id, lane } of picksWithLanes) {
-      const entry = champMap.get(id) ?? { id, picks: 0, wins: 0, bans: 0 };
+      const entry = champMap.get(id) ?? { id, picks: 0, decidedPicks: 0, wins: 0, bans: 0 };
       entry.picks += 1;
-      if (trackWins && won) entry.wins += 1;
+      if (trackWins && decided) {
+        entry.decidedPicks += 1;
+        if (won) entry.wins += 1;
+      }
       champMap.set(id, entry);
 
       const roleMap = roleMaps.get(lane);
       if (!roleMap) continue;
-      const roleEntry = roleMap.get(id) ?? { id, picks: 0, wins: 0 };
+      const roleEntry = roleMap.get(id) ?? { id, picks: 0, decidedPicks: 0, wins: 0 };
       roleEntry.picks += 1;
-      if (trackWins && won) roleEntry.wins += 1;
+      if (trackWins && decided) {
+        roleEntry.decidedPicks += 1;
+        if (won) roleEntry.wins += 1;
+      }
       roleMap.set(id, roleEntry);
     }
   }
@@ -266,7 +272,7 @@ function aggregateChampionStats(items, trackWins = true) {
       ...c,
       pickRate: (c.picks / totalGames) * 100,
       banRate: (c.bans / totalGames) * 100,
-      winRate: trackWins && c.picks > 0 ? (c.wins / c.picks) * 100 : null,
+      winRate: trackWins && c.decidedPicks > 0 ? (c.wins / c.decidedPicks) * 100 : null,
     }))
     .filter((c) => c.picks > 0 || c.bans > 0)
     .sort((a, b) => b.picks - a.picks || b.bans - a.bans || a.id.localeCompare(b.id));
@@ -280,7 +286,7 @@ function aggregateChampionStats(items, trackWins = true) {
       .map((c) => ({
         ...c,
         pickRate: (c.picks / totalGames) * 100,
-        winRate: trackWins && c.picks > 0 ? (c.wins / c.picks) * 100 : null,
+        winRate: trackWins && c.decidedPicks > 0 ? (c.wins / c.decidedPicks) * 100 : null,
       }))
       .sort((a, b) => b.picks - a.picks || a.id.localeCompare(b.id)),
   }));
@@ -299,6 +305,7 @@ function buildOurTeamItems(contexts, myTeamName = '') {
       game,
       bans,
       picksWithLanes: getPicksWithLanes(picks, pickLanes),
+      decided: Boolean(game.winner),
       won: game.winner === side,
     });
   }
@@ -357,7 +364,7 @@ export function computeOurSideAnalytics(games) {
   const items = games.map((game) => {
     const { bans, picks, pickLanes } = getSideBansPicks(game, game.ourSide);
     const won = game.winner === game.ourSide;
-    return { bans, picksWithLanes: getPicksWithLanes(picks, pickLanes), won };
+    return { bans, picksWithLanes: getPicksWithLanes(picks, pickLanes), decided: Boolean(game.winner), won };
   });
   return aggregateChampionStats(items, true);
 }
@@ -373,6 +380,7 @@ export function computeOurSideSplit(contexts, myTeamName = '') {
     const item = {
       bans,
       picksWithLanes: getPicksWithLanes(picks, pickLanes),
+      decided: Boolean(game.winner),
       won: game.winner === side,
     };
     if (side === 'Blue') blueItems.push(item);
@@ -521,6 +529,7 @@ export function computeTeamAnalytics(contexts, teamName, myTeamName = '', filter
     items.push({
       bans,
       picksWithLanes: getPicksWithLanes(picks, pickLanes),
+      decided: Boolean(ctx.game.winner),
       won,
     });
   }
