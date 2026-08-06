@@ -113,13 +113,14 @@ function RoleBlock({
   role,
   champions,
   getChampionIconUrl,
-  showWin = true,
-  showPickRate = true,
   laneRate,
-  mode = 'pick',
+  variant = 'pick-rate-win',
 }) {
   if (!role.champions.length && laneRate == null) return null;
-  const rateLabel = mode === 'ban' ? 'BAN 率' : '出場率';
+  const showBanRate = variant === 'ban-rate';
+  const showPickRate = variant === 'pick-rate' || variant === 'pick-rate-win';
+  const showPickCount = variant === 'pick-count-win';
+  const showWin = variant === 'pick-rate-win' || variant === 'pick-count-win';
   return (
     <div className="analytics-role-block rounded-lg border border-gray-700/80 bg-gray-900/40 p-4">
       <h3 className="text-sm font-semibold text-gray-200 mb-3">
@@ -132,14 +133,21 @@ function RoleBlock({
         <p className="text-xs text-gray-600">—</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[200px]">
+          <table className={showPickCount ? 'w-full min-w-[360px]' : 'w-full min-w-[200px]'}>
             <thead>
               <tr className="text-[10px] text-gray-500 uppercase tracking-wide">
                 <th className="pb-2 text-left font-medium">英雄</th>
-                {(mode === 'ban' || showPickRate) && (
-                  <th className="pb-2 text-right font-medium">{rateLabel}</th>
+                {(showBanRate || showPickRate) && (
+                  <th className="pb-2 text-right font-medium">{showBanRate ? 'BAN 率' : '出場率'}</th>
                 )}
-                {showWin && mode === 'pick' && <th className="pb-2 text-right font-medium">勝率</th>}
+                {showPickCount && (
+                  <>
+                    <th className="pb-2 text-right font-medium">出場數</th>
+                    <th className="pb-2 text-right font-medium">勝</th>
+                    <th className="pb-2 text-right font-medium">敗</th>
+                  </>
+                )}
+                {showWin && <th className="pb-2 text-right font-medium">勝率</th>}
               </tr>
             </thead>
             <tbody>
@@ -157,12 +165,25 @@ function RoleBlock({
                       </span>
                     </div>
                   </td>
-                  {(mode === 'ban' || showPickRate) && (
+                  {(showBanRate || showPickRate) && (
                     <td className="py-2 px-2 text-sm tabular-nums text-right text-gray-300">
-                      {formatRate(mode === 'ban' ? row.banRate : row.pickRate)}
+                      {formatRate(showBanRate ? row.banRate : row.pickRate)}
                     </td>
                   )}
-                  {showWin && mode === 'pick' && (
+                  {showPickCount && (
+                    <>
+                      <td className="py-2 px-2 text-sm tabular-nums text-right text-gray-400">
+                        {row.picks}
+                      </td>
+                      <td className="py-2 px-2 text-sm tabular-nums text-right text-emerald-400">
+                        {row.wins}
+                      </td>
+                      <td className="py-2 px-2 text-sm tabular-nums text-right text-rose-400">
+                        {row.decidedPicks - row.wins}
+                      </td>
+                    </>
+                  )}
+                  {showWin && (
                     <td className="py-2 pl-2 text-sm tabular-nums text-right text-gray-300">
                       {formatRate(row.winRate)}
                     </td>
@@ -409,7 +430,7 @@ function EnemyOpponentGroup({ group, champions, getChampionIconUrl, defaultOpen 
                 role={role}
                 champions={champions}
                 getChampionIconUrl={getChampionIconUrl}
-                showWin={false}
+                variant="pick-rate"
               />
             ))}
           </div>
@@ -618,8 +639,7 @@ export default function AnalyticsPage() {
                           role={role}
                           champions={champions}
                           getChampionIconUrl={getChampionIconUrl}
-                          showPickRate={false}
-                          mode="pick"
+                          variant="pick-count-win"
                         />
                       ))}
                     </div>
@@ -633,9 +653,8 @@ export default function AnalyticsPage() {
                           role={role}
                           champions={champions}
                           getChampionIconUrl={getChampionIconUrl}
-                          showWin={false}
                           laneRate={role.laneRate}
-                          mode="ban"
+                          variant="ban-rate"
                         />
                       ))}
                     </div>
@@ -720,8 +739,6 @@ export default function AnalyticsPage() {
                           role={role}
                           champions={champions}
                           getChampionIconUrl={getChampionIconUrl}
-                          showWin
-                          mode="pick"
                         />
                       ))}
                     </div>
